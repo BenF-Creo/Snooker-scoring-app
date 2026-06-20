@@ -21,12 +21,15 @@ offline like a real app.
 - **Two games:** Snooker (full rules, breaks, frames & matches) and English
   Billiards (cannons, pots, in-offs, play to a target score).
 - **Rules section** for each game, written in plain English.
-- **Two players with names** — set them once; they apply to both games and are
-  remembered between sessions.
-- **Break-building statistics** (all-time): highest break, 20+/50+/century
-  counts, average break, points per visit, consistency (% of visits that
-  scored), a break-size distribution, and a break-by-break log — per player,
-  for both games.
+- **Player profiles** — create and save named players, pick who's playing each
+  game, and stats are tracked to that profile (renaming keeps their history).
+- **Break-building statistics** (all-time, per profile): highest break,
+  20+/50+/century counts, average break, points per visit, consistency
+  (% of visits that scored), a break-size distribution, and a break-by-break
+  log — for both games.
+- **Leaderboard** ranking every player by highest break, centuries, average,
+  breaks made or consistency, for either game.
+- The live scoreboard shows each player's **match-high break**.
 - **In-progress games are auto-saved**, so a refresh won't lose your score.
 - **Installable / offline** via a web app manifest and service worker.
 

@@ -402,6 +402,55 @@ select.field__input {
 .cleared:active { background: rgba(224, 138, 107, 0.1); }
 .primary--danger { background: linear-gradient(180deg, #e89a7e, var(--danger)) !important; color: #2a1208 !important; }
 
+.scard--wide { padding: 16px; }
+.scard--wide .scard__highnum { font-size: 52px; }
+.dist-h { margin: 14px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- Players / profiles ---------- */
+.nowplaying { display: flex; gap: 12px; }
+.nowplaying .field { flex: 1; }
+.plist { display: flex; flex-direction: column; gap: 8px; }
+.prow {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 8px 7px 12px;
+}
+.prow__name {
+  flex: 1; min-width: 0; appearance: none; background: transparent; border: none; color: var(--text);
+  font-size: 15px; font-weight: 600; padding: 8px 0;
+}
+.prow__name:focus { outline: none; }
+.prow__stats {
+  appearance: none; border: 1px solid var(--line-strong); background: transparent; color: var(--accent-2);
+  font-size: 12px; font-weight: 700; padding: 8px 11px; border-radius: 9px; cursor: pointer; flex: none;
+}
+.prow__del {
+  appearance: none; border: none; background: transparent; color: var(--faint);
+  font-size: 15px; width: 34px; height: 34px; border-radius: 9px; cursor: pointer; flex: none;
+}
+.prow__del:active { background: rgba(224, 138, 107, 0.14); color: var(--danger); }
+.addrow { display: flex; gap: 10px; margin-top: 14px; }
+.addrow .field__input { flex: 1; }
+.addrow .btn { flex: none; padding-left: 22px; padding-right: 22px; }
+
+/* ---------- Leaderboard ---------- */
+.lb { display: flex; flex-direction: column; margin-top: 4px; }
+.lbrow {
+  display: flex; align-items: center; gap: 12px; padding: 13px 6px;
+  border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.lbrow:last-child { border-bottom: none; }
+.lbrow:active { background: var(--surface); }
+.lbrank {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; font-weight: 800;
+  background: var(--surface-2); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.lbrank--1 { background: linear-gradient(180deg, #e9cd8a, #c8a96a); color: #2a1f08; }
+.lbrank--2 { background: linear-gradient(180deg, #d4d7d9, #a9adb0); color: #1c2024; }
+.lbrank--3 { background: linear-gradient(180deg, #d29a6e, #b07647); color: #2a1408; }
+.lbname { flex: 1; min-width: 0; font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lbval { flex: none; font-size: 18px; font-weight: 800; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+
 /* ---------- Overlay / modal ---------- */
 .overlay { display: none; position: fixed; inset: 0; z-index: 50; }
 .overlay.active { display: flex; align-items: center; justify-content: center; padding: 24px; }

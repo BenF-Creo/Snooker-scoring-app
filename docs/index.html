@@ -74,14 +74,14 @@
           </div>
         </div>
 
-        <button class="home__players" data-nav="settings">
+        <button class="home__players" data-nav="players">
           <span>Players</span>
           <strong id="home-players">Player 1 &amp; Player 2</strong>
         </button>
 
-        <button class="home__players" data-nav="stats">
-          <span>Statistics</span>
-          <strong>Breaks, averages &amp; consistency</strong>
+        <button class="home__players" data-nav="leaderboard">
+          <span>Leaderboard</span>
+          <strong>Rankings &amp; player stats</strong>
         </button>
       </div>
     </section>
@@ -92,33 +92,44 @@
     <!-- BILLIARDS (rendered by JS) -->
     <section class="screen" id="screen-billiards"></section>
 
-    <!-- STATISTICS -->
-    <section class="screen" id="screen-stats">
+    <!-- PLAYERS (rendered by JS) -->
+    <section class="screen" id="screen-players">
       <header class="appbar">
         <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
-        <div class="appbar__title">Statistics</div>
+        <div class="appbar__title">Players</div>
         <span class="appbar__btn appbar__btn--ghost"></span>
       </header>
-      <div class="screen__body" id="stats-body"></div>
+      <div class="screen__body" id="players-body"></div>
+    </section>
+
+    <!-- PLAYER STATS (rendered by JS) -->
+    <section class="screen" id="screen-player">
+      <header class="appbar">
+        <button class="appbar__btn appbar__btn--icon" data-nav="players"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Players</span></button>
+        <div class="appbar__title" id="player-name">Player</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body" id="player-body"></div>
+    </section>
+
+    <!-- LEADERBOARD (rendered by JS) -->
+    <section class="screen" id="screen-leaderboard">
+      <header class="appbar">
+        <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
+        <div class="appbar__title">Leaderboard</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body" id="leaderboard-body"></div>
     </section>
 
     <!-- SETTINGS -->
     <section class="screen" id="screen-settings">
       <header class="appbar">
         <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
-        <div class="appbar__title">Players &amp; Setup</div>
+        <div class="appbar__title">Match Setup</div>
         <span class="appbar__btn appbar__btn--ghost"></span>
       </header>
       <div class="screen__body form">
-        <label class="field">
-          <span class="field__label">Player 1 name</span>
-          <input id="set-name-0" class="field__input" type="text" maxlength="20" placeholder="Player 1" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span class="field__label">Player 2 name</span>
-          <input id="set-name-1" class="field__input" type="text" maxlength="20" placeholder="Player 2" autocomplete="off" />
-        </label>
-
         <label class="field">
           <span class="field__label">Snooker — number of reds</span>
           <select id="set-reds" class="field__input"></select>

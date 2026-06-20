@@ -1,6 +1,20 @@
 /* App controller: navigation, settings, persistence, rendering. */
 
-const KEYS = { settings: 'cue_settings', snooker: 'cue_snooker', billiards: 'cue_billiards', stats: 'cue_stats' };
+const KEYS = { settings: 'cue_settings', snooker: 'cue_snooker', billiards: 'cue_billiards', stats: 'cue_stats', profiles: 'cue_profiles' };
+
+const LEADER_METRICS = [
+  { key: 'high', label: 'Highest break', fmt: a => a.high },
+  { key: 'c100', label: 'Centuries (100+)', fmt: a => a.c100 },
+  { key: 'c50', label: 'Breaks 50+', fmt: a => a.c50 },
+  { key: 'avg', label: 'Average break', fmt: a => (a.avg ? a.avg.toFixed(1) : '0') },
+  { key: 'breaks', label: 'Breaks made', fmt: a => a.breaks },
+  { key: 'consistency', label: 'Consistency', fmt: a => Math.round(a.consistency) + '%' },
+];
+function metricValue(a, key) {
+  if (key === 'avg') return a.avg;
+  if (key === 'consistency') return a.consistency;
+  return a[key] || 0;
+}
 
 const ICONS = {
   back: '<svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
@@ -10,14 +24,18 @@ const ICONS = {
 };
 
 const App = {
-  settings: { playerNames: ['Player 1', 'Player 2'], snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100 },
+  settings: { playerNames: ['Player 1', 'Player 2'], players: null, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100 },
+  profiles: [],
   snooker: null,
   billiards: null,
   currentScreen: 'home',
   statsGame: 'snooker',
+  viewProfileId: null,
+  leaderMetric: 'high',
 
   init() {
     this._loadSettings();
+    this._loadProfiles();
     this._loadGames();
     this._bindNav();
     this._bindSettingsForm();
@@ -28,20 +46,60 @@ const App = {
     showScreen('home');
   },
 
-  playerName(i) {
-    const n = (this.settings.playerNames[i] || '').trim();
-    return n || ('Player ' + (i + 1));
+  // --- profiles ---
+
+  _newId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); },
+
+  profileById(id) { return this.profiles.find(p => p.id === id) || null; },
+
+  profileName(id, fallbackIndex) {
+    const p = this.profileById(id);
+    if (p) return p.name;
+    return (fallbackIndex != null) ? ('Player ' + (fallbackIndex + 1)) : 'Player';
+  },
+
+  // Name of the player currently selected for table seat i (used on home/setup).
+  playerName(i) { return this.profileName(this.settings.players ? this.settings.players[i] : null, i); },
+
+  // Name of the player actually assigned to a given game's seat i.
+  gamePlayerName(game, i) {
+    const id = (game && game.players) ? game.players[i] : (this.settings.players ? this.settings.players[i] : null);
+    return this.profileName(id, i);
+  },
+
+  addProfile(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return null;
+    const prof = { id: this._newId(), name: trimmed };
+    this.profiles.push(prof);
+    this._saveProfiles();
+    return prof;
+  },
+
+  renameProfile(id, name) {
+    const p = this.profileById(id);
+    if (p) { p.name = (name || '').trim() || p.name; this._saveProfiles(); }
+  },
+
+  deleteProfile(id) {
+    this.profiles = this.profiles.filter(p => p.id !== id);
+    while (this.profiles.length < 2) this.profiles.push({ id: this._newId(), name: 'Player ' + (this.profiles.length + 1) });
+    this._saveProfiles();
+    this.settings.players = this.settings.players.map(pid => this.profileById(pid) ? pid : this.profiles[0].id);
+    this._saveSettings();
   },
 
   newSnooker() {
     this._flushBreaks(this.snooker, 'snooker');
     this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds);
+    this.snooker.players = this.settings.players.slice();
     this.saveGames();
   },
 
   newBilliards() {
     this._flushBreaks(this.billiards, 'billiards');
     this.billiards = new BilliardsGame(this.settings.billiardsTarget);
+    this.billiards.players = this.settings.players.slice();
     this.saveGames();
   },
 
@@ -54,13 +112,19 @@ const App = {
 
   saveStats(s) { try { localStorage.setItem(KEYS.stats, JSON.stringify(s)); } catch (e) { /* ignore */ } },
 
+  _seatId(game, seat) {
+    const players = (game && game.players) || this.settings.players;
+    return players ? players[seat] : null;
+  },
+
   // Move a finished game's visits into the persisted all-time log.
   _flushBreaks(game, type) {
     if (!game || !game.breaks || !game.breaks.length) return;
     const stats = this.loadStats();
-    game.breaks.forEach(b => stats.log.push({
-      g: type, p: this.playerName(b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || Date.now(),
-    }));
+    game.breaks.forEach(b => {
+      const pid = this._seatId(game, b.player);
+      stats.log.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || Date.now() });
+    });
     if (stats.log.length > 5000) stats.log = stats.log.slice(-5000);
     this.saveStats(stats);
     game.breaks = [];
@@ -71,7 +135,10 @@ const App = {
     const out = this.loadStats().log.slice();
     const live = (game, type) => {
       if (!game || !game.breaks) return;
-      game.breaks.forEach(b => out.push({ g: type, p: this.playerName(b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || 0 }));
+      game.breaks.forEach(b => {
+        const pid = this._seatId(game, b.player);
+        out.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || 0 });
+      });
     };
     live(this.snooker, 'snooker');
     live(this.billiards, 'billiards');
@@ -97,7 +164,7 @@ const App = {
   _loadSettings() {
     try {
       const s = JSON.parse(localStorage.getItem(KEYS.settings));
-      if (s && Array.isArray(s.playerNames)) {
+      if (s && typeof s === 'object') {
         this.settings = Object.assign(this.settings, s);
       }
     } catch (e) { /* ignore */ }
@@ -105,6 +172,33 @@ const App = {
 
   _saveSettings() {
     try { localStorage.setItem(KEYS.settings, JSON.stringify(this.settings)); } catch (e) { /* ignore */ }
+  },
+
+  _loadProfiles() {
+    try {
+      const p = JSON.parse(localStorage.getItem(KEYS.profiles));
+      if (Array.isArray(p) && p.length) this.profiles = p;
+    } catch (e) { /* ignore */ }
+
+    if (!this.profiles.length) {
+      // First run (or migrating from name-only settings): seed two profiles.
+      const names = (this.settings.playerNames && this.settings.playerNames.length === 2)
+        ? this.settings.playerNames : ['Player 1', 'Player 2'];
+      this.profiles = names.map((n, i) => ({ id: this._newId(), name: (n && n.trim()) || ('Player ' + (i + 1)) }));
+      this._saveProfiles();
+    }
+
+    // Ensure a valid current selection of two existing profiles.
+    const ok = this.settings.players && this.settings.players.length === 2 &&
+      this.profileById(this.settings.players[0]) && this.profileById(this.settings.players[1]);
+    if (!ok) {
+      this.settings.players = [this.profiles[0].id, this.profiles[Math.min(1, this.profiles.length - 1)].id];
+      this._saveSettings();
+    }
+  },
+
+  _saveProfiles() {
+    try { localStorage.setItem(KEYS.profiles, JSON.stringify(this.profiles)); } catch (e) { /* ignore */ }
   },
 
   _loadGames() {
@@ -121,9 +215,6 @@ const App = {
   // --- settings form ---
 
   _fillSettingsForm() {
-    document.getElementById('set-name-0').value = this.settings.playerNames[0] === 'Player 1' ? '' : this.settings.playerNames[0];
-    document.getElementById('set-name-1').value = this.settings.playerNames[1] === 'Player 2' ? '' : this.settings.playerNames[1];
-
     const reds = document.getElementById('set-reds');
     reds.innerHTML = [15, 10].map(n => `<option value="${n}">${n} reds${n === 15 ? ' (standard)' : ' (short game)'}</option>`).join('');
     reds.value = String(this.settings.snookerReds);
@@ -137,15 +228,6 @@ const App = {
   },
 
   _bindSettingsForm() {
-    const onName = (i, el) => {
-      this.settings.playerNames[i] = el.value;
-      this._saveSettings();
-      this._updateHomePlayers();
-      this._renderActive();
-    };
-    document.getElementById('set-name-0').addEventListener('input', e => onName(0, e.target));
-    document.getElementById('set-name-1').addEventListener('input', e => onName(1, e.target));
-
     document.getElementById('set-reds').addEventListener('change', e => {
       this.settings.snookerReds = parseInt(e.target.value, 10) === 10 ? 10 : 15;
       this._saveSettings();
@@ -237,11 +319,46 @@ const App = {
       }
     });
 
-    document.getElementById('screen-stats').addEventListener('click', e => {
+    // Players (profile management + selection)
+    const players = document.getElementById('screen-players');
+    players.addEventListener('click', e => {
+      const t = e.target.closest('[data-action], [data-viewstats], [data-del]');
+      if (!t) return;
+      if (t.dataset.action === 'add-profile') {
+        const inp = document.getElementById('add-name');
+        if (this.addProfile(inp.value)) { inp.value = ''; renderPlayers(); this._updateHomePlayers(); }
+      } else if (t.dataset.viewstats) {
+        this.viewProfileId = t.dataset.viewstats; showScreen('player');
+      } else if (t.dataset.del) {
+        confirmDeleteProfile(t.dataset.del);
+      }
+    });
+    players.addEventListener('change', e => {
+      const sel = e.target.closest('[data-sel]');
+      if (sel) { this.settings.players[+sel.dataset.sel] = sel.value; this._saveSettings(); this._refreshPristineGames(); this._updateHomePlayers(); return; }
+      const ren = e.target.closest('[data-rename]');
+      if (ren) { this.renameProfile(ren.dataset.rename, ren.value); this._updateHomePlayers(); }
+    });
+
+    // Individual player stats
+    document.getElementById('screen-player').addEventListener('click', e => {
       const t = e.target.closest('[data-action]');
       if (!t) return;
-      if (t.dataset.action === 'stats-game') { this.statsGame = t.dataset.game; renderStats(); }
+      if (t.dataset.action === 'stats-game') { this.statsGame = t.dataset.game; renderPlayer(); }
+    });
+
+    // Leaderboard
+    const lb = document.getElementById('screen-leaderboard');
+    lb.addEventListener('click', e => {
+      const t = e.target.closest('[data-action], [data-viewstats]');
+      if (!t) return;
+      if (t.dataset.action === 'stats-game') { this.statsGame = t.dataset.game; renderLeaderboard(); }
       else if (t.dataset.action === 'clear-stats') { confirmClearStats(); }
+      else if (t.dataset.viewstats) { this.viewProfileId = t.dataset.viewstats; showScreen('player'); }
+    });
+    lb.addEventListener('change', e => {
+      const m = e.target.closest('[data-metric]');
+      if (m) { this.leaderMetric = m.value; renderLeaderboard(); }
     });
   },
 
@@ -267,7 +384,9 @@ function showScreen(id) {
   });
   if (id === 'snooker') renderSnooker();
   if (id === 'billiards') renderBilliards();
-  if (id === 'stats') renderStats();
+  if (id === 'players') renderPlayers();
+  if (id === 'player') renderPlayer();
+  if (id === 'leaderboard') renderLeaderboard();
   window.scrollTo(0, 0);
 }
 
@@ -288,12 +407,20 @@ function closeOverlay() {
 
 function afterSnooker() { App.saveGames(); renderSnooker(); }
 
+// Best break this match for a seat: recorded visits plus the live break.
+function snookerMatchHigh(g, seat) {
+  let hi = 0;
+  g.breaks.forEach(b => { if (b.player === seat) hi = Math.max(hi, b.value); });
+  if (!g.frame.isOver && g.frame.currentPlayer === seat) hi = Math.max(hi, g.frame.currentBreak);
+  return hi;
+}
+
 function renderSnooker() {
   const g = App.snooker;
   if (!g) return;
   const f = g.frame;
   const legal = g.legalKeys();
-  const name = i => escapeHtml(App.playerName(i));
+  const name = i => escapeHtml(App.gamePlayerName(g, i));
 
   const panels = [0, 1].map(i => {
     const active = !f.isOver && f.currentPlayer === i;
@@ -306,7 +433,7 @@ function renderSnooker() {
         <div class="panel__turn">${turn}</div>
         <div class="panel__stats">
           <div class="stat"><span class="stat__value">${g.framesWon[i]}</span><span class="stat__label">Frames</span></div>
-          <div class="stat"><span class="stat__value">${f.highBreaks[i]}</span><span class="stat__label">High break</span></div>
+          <div class="stat"><span class="stat__value">${snookerMatchHigh(g, i)}</span><span class="stat__label">Match high</span></div>
         </div>
       </div>`;
   }).join('');
@@ -363,7 +490,7 @@ function renderSnooker() {
 }
 
 function openFoulModal() {
-  const opp = escapeHtml(App.playerName(1 - App.snooker.frame.currentPlayer));
+  const opp = escapeHtml(App.gamePlayerName(App.snooker, 1 - App.snooker.frame.currentPlayer));
   openOverlay(`
     <h3>Foul</h3>
     <p class="muted">Penalty points to ${opp}</p>
@@ -386,7 +513,7 @@ function showSnookerResult() {
   openOverlay(`
     <div class="result__badge">${matchOver ? ICONS.trophy : ICONS.check}</div>
     <h3>${matchOver ? 'Match Won' : 'Frame Won'}</h3>
-    <div class="result__name">${escapeHtml(App.playerName(w))}</div>
+    <div class="result__name">${escapeHtml(App.gamePlayerName(g, w))}</div>
     <div class="result__score">${f.scores[0]} – ${f.scores[1]}</div>
     <p class="muted">Frames ${g.framesWon[0]} – ${g.framesWon[1]}</p>
     ${matchOver
@@ -406,7 +533,7 @@ function afterBilliards() { App.saveGames(); renderBilliards(); }
 function renderBilliards() {
   const g = App.billiards;
   if (!g) return;
-  const name = i => escapeHtml(App.playerName(i));
+  const name = i => escapeHtml(App.gamePlayerName(g, i));
 
   const panels = [0, 1].map(i => {
     const active = !g.isOver && g.currentPlayer === i;
@@ -465,7 +592,7 @@ function showBilliardsResult() {
   openOverlay(`
     <div class="result__badge">${w === null ? ICONS.draw : ICONS.trophy}</div>
     <h3>${w === null ? 'Game Drawn' : 'Game Won'}</h3>
-    ${w === null ? '' : `<div class="result__name">${escapeHtml(App.playerName(w))}</div>`}
+    ${w === null ? '' : `<div class="result__name">${escapeHtml(App.gamePlayerName(g, w))}</div>`}
     <div class="result__score">${g.scores[0]} – ${g.scores[1]}</div>
     <button class="primary" data-newgame>New Game</button>`);
   document.getElementById('overlay').querySelector('[data-newgame]').onclick = () => {
@@ -491,8 +618,13 @@ function bucketize(values) {
   return b;
 }
 
-function aggregateBreaks(records, name) {
-  const visits = records.filter(r => r.p === name);
+// Records belonging to a profile: by id, or by name for older id-less records.
+function recordsForProfile(records, profile) {
+  return records.filter(r => (r.pid && r.pid === profile.id) || (!r.pid && r.p === profile.name));
+}
+
+function aggregateBreaks(records, profile) {
+  const visits = recordsForProfile(records, profile);
   const scoring = visits.filter(r => r.v > 0);
   const values = scoring.map(r => r.v);
   const sum = values.reduce((a, b) => a + b, 0);
@@ -523,13 +655,23 @@ function timeAgo(t) {
   return Math.floor(d / 365) + 'y ago';
 }
 
-function statCard(name, a) {
+function gameToggle() {
+  const game = App.statsGame;
+  return `<div class="seg">
+      <button class="seg__btn ${game === 'snooker' ? 'seg__btn--active' : ''}" data-action="stats-game" data-game="snooker">Snooker</button>
+      <button class="seg__btn ${game === 'billiards' ? 'seg__btn--active' : ''}" data-action="stats-game" data-game="billiards">Billiards</button>
+    </div>`;
+}
+
+function statDetail(a) {
   const rows = [
     ['Breaks made', a.breaks],
     ['Average break', a.avg ? a.avg.toFixed(1) : '—'],
     ['Points / visit', a.ppv ? a.ppv.toFixed(1) : '—'],
-    ['20+ / 50+ / 100+', `${a.c20} / ${a.c50} / ${a.c100}`],
+    ['Centuries (100+)', a.c100],
+    ['Breaks 50+ / 20+', `${a.c50} / ${a.c20}`],
     ['Consistency', a.visits ? Math.round(a.consistency) + '%' : '—'],
+    ['Total visits', a.visits],
   ].map(([k, v]) => `<div class="srow"><span>${k}</span><b>${v}</b></div>`).join('');
 
   const maxB = Math.max(1, a.buckets[0], a.buckets[1], a.buckets[2], a.buckets[3], a.buckets[4]);
@@ -541,53 +683,122 @@ function statCard(name, a) {
       </div>`).join('');
 
   return `
-    <div class="scard">
-      <div class="scard__name">${escapeHtml(name)}</div>
+    <div class="scard scard--wide">
       <div class="scard__high"><span class="scard__highnum">${a.high}</span><span class="scard__highlbl">Highest break</span></div>
       <div class="srows">${rows}</div>
+      <h4 class="dist-h">Break sizes</h4>
       <div class="dist">${dist}</div>
     </div>`;
 }
 
-function breakLog(records) {
-  const items = records.filter(r => r.v > 0).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 60);
-  if (!items.length) return '';
+function breakLog(records, profile) {
+  let items = records.filter(r => r.v > 0);
+  if (profile) items = recordsForProfile(items, profile);
+  items = items.sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 60);
+  if (!items.length) return '<div class="stats-empty">No breaks yet.</div>';
   return items.map(r => `
       <div class="logitem">
         <span class="logitem__val">${r.v}</span>
         <div class="logitem__meta">
-          <span class="logitem__name">${escapeHtml(r.p)}</span>
-          <span class="logitem__sub">${r.fr ? 'Frame ' + r.fr : 'Game'}</span>
+          <span class="logitem__name">${profile ? (r.fr ? 'Frame ' + r.fr : 'Game') : escapeHtml(r.p)}</span>
+          ${profile ? '' : `<span class="logitem__sub">${r.fr ? 'Frame ' + r.fr : 'Game'}</span>`}
         </div>
         <span class="logitem__time">${timeAgo(r.t)}</span>
       </div>`).join('');
 }
 
-function renderStats() {
+/* Players (profile management + selection) */
+
+function renderPlayers() {
+  const profs = App.profiles;
+  const opts = selId => profs.map(p => `<option value="${p.id}" ${p.id === selId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+  const list = profs.map(p => `
+      <div class="prow">
+        <input class="prow__name" data-rename="${p.id}" value="${escapeHtml(p.name)}" maxlength="20" aria-label="Player name" autocomplete="off" />
+        <button class="prow__stats" data-viewstats="${p.id}">Stats ›</button>
+        <button class="prow__del" data-del="${p.id}" aria-label="Delete player">✕</button>
+      </div>`).join('');
+
+  document.getElementById('players-body').innerHTML = `
+    <h3 class="stats-h">Now playing</h3>
+    <div class="nowplaying">
+      <label class="field"><span class="field__label">Player 1</span><select class="field__input" data-sel="0">${opts(App.settings.players[0])}</select></label>
+      <label class="field"><span class="field__label">Player 2</span><select class="field__input" data-sel="1">${opts(App.settings.players[1])}</select></label>
+    </div>
+    <p class="form__note">Whoever is selected here is tracked when you start a new game. Changing it updates a game that hasn’t been scored yet.</p>
+    <h3 class="stats-h">Profiles</h3>
+    <div class="plist">${list}</div>
+    <div class="addrow">
+      <input id="add-name" class="field__input" type="text" placeholder="Add a player…" maxlength="20" autocomplete="off" />
+      <button class="btn btn--primary" data-action="add-profile">Save</button>
+    </div>`;
+}
+
+/* Individual player stats */
+
+function renderPlayer() {
+  const prof = App.profileById(App.viewProfileId);
+  if (!prof) { showScreen('players'); return; }
+  document.getElementById('player-name').textContent = prof.name;
+
   const game = App.statsGame;
   const records = App.allRecords().filter(r => r.g === game);
-  const names = [App.playerName(0), App.playerName(1)];
+  const a = aggregateBreaks(records, prof);
   const label = game === 'snooker' ? 'snooker' : 'billiards';
 
-  const toggle = `
-    <div class="seg">
-      <button class="seg__btn ${game === 'snooker' ? 'seg__btn--active' : ''}" data-action="stats-game" data-game="snooker">Snooker</button>
-      <button class="seg__btn ${game === 'billiards' ? 'seg__btn--active' : ''}" data-action="stats-game" data-game="billiards">Billiards</button>
-    </div>`;
-
   let body;
-  if (!records.some(r => r.v > 0)) {
-    body = `<div class="stats-empty">No ${label} breaks recorded yet.<br>Play a few visits and your stats will build up here automatically.</div>`;
+  if (a.breaks === 0) {
+    body = gameToggle() + `<div class="stats-empty">No ${label} breaks recorded for ${escapeHtml(prof.name)} yet.</div>`;
   } else {
-    const cards = names.map(n => statCard(n, aggregateBreaks(records, n))).join('');
-    body = `
-      <div class="statcards">${cards}</div>
-      <h3 class="stats-h">Recent breaks</h3>
-      <div class="log">${breakLog(records)}</div>
-      <button class="cleared" data-action="clear-stats">Clear all statistics</button>`;
+    body = gameToggle() + statDetail(a) +
+      `<h3 class="stats-h">Recent breaks</h3><div class="log">${breakLog(records, prof)}</div>`;
+  }
+  document.getElementById('player-body').innerHTML = body;
+}
+
+/* Leaderboard */
+
+function renderLeaderboard() {
+  const game = App.statsGame;
+  const metric = App.leaderMetric;
+  const records = App.allRecords().filter(r => r.g === game);
+  const rows = App.profiles
+    .map(p => ({ p, a: aggregateBreaks(records, p) }))
+    .filter(x => x.a.breaks > 0)
+    .sort((x, y) => metricValue(y.a, metric) - metricValue(x.a, metric));
+
+  const metricDef = LEADER_METRICS.find(m => m.key === metric) || LEADER_METRICS[0];
+  const metricSel = `<select class="field__input" data-metric>${LEADER_METRICS.map(m => `<option value="${m.key}" ${m.key === metric ? 'selected' : ''}>${m.label}</option>`).join('')}</select>`;
+
+  let listHtml;
+  if (!rows.length) {
+    listHtml = `<div class="stats-empty">No ${game} breaks recorded yet.<br>Play some frames and your players will be ranked here.</div>`;
+  } else {
+    listHtml = '<div class="lb">' + rows.map((x, i) => `
+        <div class="lbrow" data-viewstats="${x.p.id}">
+          <span class="lbrank ${i < 3 ? 'lbrank--' + (i + 1) : ''}">${i + 1}</span>
+          <span class="lbname">${escapeHtml(x.p.name)}</span>
+          <span class="lbval">${metricDef.fmt(x.a)}</span>
+        </div>`).join('') + '</div>';
   }
 
-  document.getElementById('stats-body').innerHTML = toggle + body;
+  document.getElementById('leaderboard-body').innerHTML =
+    gameToggle() +
+    `<label class="field"><span class="field__label">Rank by</span>${metricSel}</label>` +
+    listHtml +
+    (rows.length ? `<button class="cleared" data-action="clear-stats">Clear all statistics</button>` : '');
+}
+
+function confirmDeleteProfile(id) {
+  const p = App.profileById(id);
+  openOverlay(`
+    <h3>Delete player</h3>
+    <p class="muted">Remove ${p ? escapeHtml(p.name) : 'this player'}? Their recorded breaks stay in the history, but the profile is removed and at least two players are always kept.</p>
+    <button class="primary primary--danger" data-confirm>Delete player</button>
+    <button class="modal__cancel" data-cancel style="margin-top:10px">Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-confirm]').onclick = () => { App.deleteProfile(id); closeOverlay(); renderPlayers(); App._updateHomePlayers(); };
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
 }
 
 function confirmClearStats() {
@@ -597,7 +808,7 @@ function confirmClearStats() {
     <button class="primary primary--danger" data-clear>Delete all stats</button>
     <button class="modal__cancel" data-cancel style="margin-top:10px">Cancel</button>`);
   const o = document.getElementById('overlay');
-  o.querySelector('[data-clear]').onclick = () => { App.clearStats(); closeOverlay(); renderStats(); };
+  o.querySelector('[data-clear]').onclick = () => { App.clearStats(); closeOverlay(); renderLeaderboard(); };
   o.querySelector('[data-cancel]').onclick = closeOverlay;
 }
 
