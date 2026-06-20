@@ -1,4 +1,66 @@
-# 🎱 Snooker Scoring
+# 🎱 Cue Sports Scorer
+
+Two ways to keep score for snooker (and now **English Billiards**):
+
+1. **📱 Mobile web app** (`docs/`) — works in any phone browser, no install or
+   Mac needed. This is the easiest one to actually use. See
+   [Web app](#-web-app-snooker--english-billiards) below.
+2. **Native iOS app** (`SnookerScoring/`) — a SwiftUI Xcode project for snooker.
+   See [iOS app](#-ios-app-snooker) below.
+
+---
+
+## 📱 Web app (Snooker & English Billiards)
+
+A mobile-first web app in `docs/`. No build step — it's plain HTML, CSS and
+JavaScript, and can be added to your phone's home screen to run full-screen and
+offline like a real app.
+
+### Features
+
+- **Two games:** Snooker (full rules, breaks, frames & matches) and English
+  Billiards (cannons, pots, in-offs, play to a target score).
+- **Rules section** for each game, written in plain English.
+- **Two players with names** — set them once; they apply to both games and are
+  remembered between sessions.
+- **In-progress games are auto-saved**, so a refresh won't lose your score.
+- **Installable / offline** via a web app manifest and service worker.
+
+### Try it on your phone (free hosting via GitHub Pages)
+
+1. In GitHub: **Settings → Pages**.
+2. Under *Build and deployment*, set **Source = Deploy from a branch**, pick this
+   branch, set the folder to **`/docs`**, and **Save**.
+3. After a minute GitHub gives you a URL like
+   `https://<user>.github.io/<repo>/`. Open it on your phone.
+4. To install: in Safari tap **Share → Add to Home Screen** (or Chrome's
+   **⋮ → Add to Home screen**).
+
+To run it locally on a computer, serve the folder (a service worker needs
+`http`, not `file://`):
+
+```bash
+cd docs && python3 -m http.server 8000   # then open http://localhost:8000
+```
+
+### Web app layout
+
+```
+docs/
+├─ index.html                 # All screens (home, games, rules, settings)
+├─ styles.css                 # Mobile-first dark "baize" theme
+├─ manifest.webmanifest       # PWA install metadata
+├─ sw.js                      # Offline cache (service worker)
+├─ icons/icon.svg             # App icon
+└─ js/
+   ├─ snooker.js              # Snooker rule engine (DOM-free)
+   ├─ billiards.js            # English Billiards rule engine (DOM-free)
+   └─ app.js                  # Navigation, settings, persistence, rendering
+```
+
+---
+
+## 📲 iOS app (Snooker)
 
 A native iOS app for keeping score during a game of snooker, built with SwiftUI.
 It enforces the real rules of snooker so you can just tap the ball that was

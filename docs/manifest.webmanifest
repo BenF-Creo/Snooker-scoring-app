@@ -1,0 +1,19 @@
+{
+  "name": "Cue Sports Scorer",
+  "short_name": "Cue Scorer",
+  "description": "Scoring for Snooker and English Billiards, with rules and two named players.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#062018",
+  "theme_color": "#0b3d2e",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

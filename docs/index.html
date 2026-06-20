@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b3d2e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cue Scorer" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>Cue Sports Scorer — Snooker &amp; Billiards</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="app">
+
+    <!-- HOME -->
+    <section class="screen active" id="screen-home">
+      <header class="appbar">
+        <span class="appbar__btn appbar__btn--ghost"></span>
+        <div class="appbar__title">Cue Sports Scorer</div>
+        <button class="appbar__btn" data-nav="settings" aria-label="Settings">⚙︎</button>
+      </header>
+      <div class="screen__body home">
+        <p class="home__intro">Keep score for two players. Pick a game to start.</p>
+
+        <div class="card card--snooker">
+          <div class="card__head">
+            <span class="card__emoji">🎯</span>
+            <div>
+              <h2 class="card__title">Snooker</h2>
+              <p class="card__sub">Full rules · breaks · frames &amp; matches</p>
+            </div>
+          </div>
+          <div class="card__actions">
+            <button class="btn btn--primary" data-nav="snooker">Play</button>
+            <button class="btn btn--ghost" data-nav="rules-snooker">Rules</button>
+          </div>
+        </div>
+
+        <div class="card card--billiards">
+          <div class="card__head">
+            <span class="card__emoji">🔴</span>
+            <div>
+              <h2 class="card__title">English Billiards</h2>
+              <p class="card__sub">Cannons, pots &amp; in-offs · play to a target</p>
+            </div>
+          </div>
+          <div class="card__actions">
+            <button class="btn btn--primary" data-nav="billiards">Play</button>
+            <button class="btn btn--ghost" data-nav="rules-billiards">Rules</button>
+          </div>
+        </div>
+
+        <button class="home__players" data-nav="settings">
+          <span>Players</span>
+          <strong id="home-players">Player 1 &amp; Player 2</strong>
+        </button>
+      </div>
+    </section>
+
+    <!-- SNOOKER (rendered by JS) -->
+    <section class="screen" id="screen-snooker"></section>
+
+    <!-- BILLIARDS (rendered by JS) -->
+    <section class="screen" id="screen-billiards"></section>
+
+    <!-- SETTINGS -->
+    <section class="screen" id="screen-settings">
+      <header class="appbar">
+        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <div class="appbar__title">Players &amp; Setup</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body form">
+        <label class="field">
+          <span class="field__label">Player 1 name</span>
+          <input id="set-name-0" class="field__input" type="text" maxlength="20" placeholder="Player 1" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field__label">Player 2 name</span>
+          <input id="set-name-1" class="field__input" type="text" maxlength="20" placeholder="Player 2" autocomplete="off" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Snooker — match length</span>
+          <select id="set-bestof" class="field__input"></select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Billiards — target score</span>
+          <select id="set-target" class="field__input"></select>
+        </label>
+
+        <p class="form__note">Names apply to both games. Changing a game length or target affects the next new game you start.</p>
+
+        <button class="btn btn--primary btn--block" data-nav="home">Done</button>
+      </div>
+    </section>
+
+    <!-- RULES: SNOOKER -->
+    <section class="screen" id="screen-rules-snooker">
+      <header class="appbar">
+        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <div class="appbar__title">Snooker Rules</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body rules">
+        <h3>Objective</h3>
+        <p>Score more points than your opponent in a <em>frame</em> by potting balls in the correct order. A match is the best of an agreed number of frames.</p>
+
+        <h3>Balls &amp; values</h3>
+        <ul class="rules__balls">
+          <li><span class="chip chip--red"></span>Red — 1</li>
+          <li><span class="chip chip--yellow"></span>Yellow — 2</li>
+          <li><span class="chip chip--green"></span>Green — 3</li>
+          <li><span class="chip chip--brown"></span>Brown — 4</li>
+          <li><span class="chip chip--blue"></span>Blue — 5</li>
+          <li><span class="chip chip--pink"></span>Pink — 6</li>
+          <li><span class="chip chip--black"></span>Black — 7</li>
+        </ul>
+        <p>There are 15 reds and the 6 colours.</p>
+
+        <h3>Playing a frame</h3>
+        <ol>
+          <li>While reds remain, you must pot a <strong>red</strong> first (1 point), then a <strong>colour</strong> of your choice. Reds stay down once potted; colours are returned to their spots.</li>
+          <li>Keep alternating red, colour, red, colour… Your turn (your <em>break</em>) continues as long as you keep potting legally.</li>
+          <li>Once all reds are gone, pot the final colour, then clear the six colours <strong>in ascending order</strong>: yellow, green, brown, blue, pink, black. These are not respotted.</li>
+        </ol>
+        <p class="rules__tip">The app dims any ball that isn’t legal to pot next, so just tap what went in.</p>
+
+        <h3>Breaks</h3>
+        <p>A break is the number of points scored in a single visit to the table. The app tracks your current break and your highest break of the frame.</p>
+
+        <h3>Fouls</h3>
+        <p>A foul ends your turn and awards penalty points to your opponent: a minimum of <strong>4</strong>, or the value of the ball involved if higher (5 for blue, 6 for pink, 7 for black).</p>
+
+        <h3>Winning</h3>
+        <p>The player with more points once the black is potted wins the frame (a player who is well behind may concede). Win enough frames to take the match — the app shows “first to N”.</p>
+
+        <button class="btn btn--primary btn--block" data-nav="snooker">Start Snooker</button>
+      </div>
+    </section>
+
+    <!-- RULES: BILLIARDS -->
+    <section class="screen" id="screen-rules-billiards">
+      <header class="appbar">
+        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <div class="appbar__title">Billiards Rules</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body rules">
+        <h3>Objective</h3>
+        <p>English Billiards is played with three balls: two cue balls (a plain white and a spot white — one per player) and a red object ball. You keep your own cue ball all game. First to the agreed target score wins.</p>
+
+        <h3>Ways to score</h3>
+        <ul class="rules__strokes">
+          <li><strong>Cannon</strong> — your cue ball strikes both other balls in one stroke: <strong>2 points</strong>.</li>
+          <li><strong>Pot red</strong> (winning hazard): <strong>3 points</strong>.</li>
+          <li><strong>In-off red</strong> (losing hazard — your cue ball into a pocket after hitting the red): <strong>3 points</strong>.</li>
+          <li><strong>Pot opponent’s white</strong>: <strong>2 points</strong>.</li>
+          <li><strong>In-off white</strong>: <strong>2 points</strong>.</li>
+        </ul>
+        <p>Several scores can be made in one stroke (e.g. a cannon that also goes in-off). Tap each scoring button as it happens — your break adds up.</p>
+
+        <h3>Breaks &amp; turns</h3>
+        <p>You keep playing and accumulating points until you fail to score; then tap <strong>End Break</strong> and your opponent plays. The app tracks your current and highest break.</p>
+
+        <h3>Fouls</h3>
+        <p>In standard play a foul simply ends your turn and the stroke scores nothing — no points to your opponent. Just tap <strong>End Break</strong>. Use <strong>Undo</strong> to correct a mistaken tap.</p>
+
+        <h3>Winning</h3>
+        <p>The first player to reach the agreed target (often 100–300) wins. Set the target — or “No limit” — in Players &amp; Setup; with no limit, tap <strong>Finish</strong> to end and compare scores.</p>
+
+        <p class="rules__tip">Note: this is the casual scoring used by most clubs. Full tournament rules add limits (e.g. consecutive cannons, repeated pots/in-offs from baulk) that aren’t enforced here.</p>
+
+        <button class="btn btn--primary btn--block" data-nav="billiards">Start Billiards</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal / overlay host -->
+  <div id="overlay" class="overlay"></div>
+
+  <script src="js/snooker.js"></script>
+  <script src="js/billiards.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
