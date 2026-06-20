@@ -588,7 +588,7 @@ function renderBilliards() {
   const cue = cues[g.currentPlayer];
   const opp = cues[1 - g.currentPlayer];
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  const strokes = BILLIARDS_STROKES.map(s => {
+  const renderStroke = s => {
     const label = s.object === 'opp' ? `${s.base} ${cap(opp)}` : s.base;
     const scene = s.scene.map(part => {
       const color = part.role === 'red' ? 'red' : (part.role === 'cue' ? cue : opp);
@@ -603,7 +603,11 @@ function renderBilliards() {
         <span class="stroke__val">+${s.value}</span>
         <span class="stroke__sub">${s.sub}</span>
       </button>`;
-  }).join('');
+  };
+  const strokes =
+    BILLIARDS_STROKES.filter(s => s.group !== 'combo').map(renderStroke).join('') +
+    '<div class="strokes__sep">Combinations · one stroke, one tap</div>' +
+    BILLIARDS_STROKES.filter(s => s.group === 'combo').map(renderStroke).join('');
 
   document.getElementById('screen-billiards').innerHTML = `
     <header class="appbar">

@@ -255,11 +255,16 @@ body {
 
 /* ---------- Stroke buttons (billiards) ---------- */
 .strokes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.strokes__sep {
+  grid-column: 1 / -1;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--faint); padding: 8px 2px 1px; text-align: center;
+}
 .stroke {
   appearance: none; border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
-  border-radius: var(--radius); padding: 12px 10px 11px; color: var(--text); cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 104px;
+  border-radius: var(--radius); padding: 11px 8px 10px; color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 92px;
 }
 .stroke:active { transform: scale(0.985); }
 .stroke:disabled { opacity: 0.4; }

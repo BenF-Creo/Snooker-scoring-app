@@ -6,18 +6,27 @@
    ball is pocketed). `object: 'opp'` means the named ball is the opponent's,
    so the label reflects its actual colour (white or yellow). */
 const BILLIARDS_STROKES = [
-  { key: 'cannon',     base: 'Cannon',  value: 2, sub: 'hit both balls',
+  // Single-score strokes
+  { key: 'cannon',     group: 'base', base: 'Cannon',  value: 2, sub: 'hit both balls',
     scene: [{ role: 'cue' }, { role: 'red' }, { role: 'opp' }] },
-  { key: 'potRed',     base: 'Pot Red', value: 3, sub: 'winning hazard',
+  { key: 'potRed',     group: 'base', base: 'Pot Red', value: 3, sub: 'winning hazard',
     scene: [{ role: 'cue' }, { role: 'red', badge: 'pot' }] },
-  { key: 'inOffRed',   base: 'In-off Red', value: 3, sub: 'losing hazard',
+  { key: 'inOffRed',   group: 'base', base: 'In-off Red', value: 3, sub: 'losing hazard',
     scene: [{ role: 'red' }, { role: 'cue', badge: 'inoff' }] },
-  { key: 'potWhite',   base: 'Pot', value: 2, sub: "opponent's ball", object: 'opp',
+  { key: 'potWhite',   group: 'base', base: 'Pot', value: 2, sub: "opponent's ball", object: 'opp',
     scene: [{ role: 'cue' }, { role: 'opp', badge: 'pot' }] },
-  { key: 'inOffWhite', base: 'In-off', value: 2, sub: "off opponent's ball", object: 'opp',
+  { key: 'inOffWhite', group: 'base', base: 'In-off', value: 2, sub: "off opponent's ball", object: 'opp',
     scene: [{ role: 'opp' }, { role: 'cue', badge: 'inoff' }] },
-  { key: 'five',       base: 'Five', value: 5, sub: 'cannon + in-off red',
+
+  // Combination strokes — several scores made in a single stroke
+  { key: 'five',           group: 'combo', base: 'Five', value: 5, sub: 'cannon + in-off red',
     scene: [{ role: 'opp' }, { role: 'red' }, { role: 'cue', badge: 'inoff' }] },
+  { key: 'cannonPotRed',   group: 'combo', base: 'Cannon + pot red', value: 5, sub: '2 + 3',
+    scene: [{ role: 'cue' }, { role: 'opp' }, { role: 'red', badge: 'pot' }] },
+  { key: 'cannonPotOpp',   group: 'combo', base: 'Cannon + pot', value: 4, sub: '2 + 2', object: 'opp',
+    scene: [{ role: 'cue' }, { role: 'red' }, { role: 'opp', badge: 'pot' }] },
+  { key: 'cannonInOffOpp', group: 'combo', base: 'Cannon + in-off', value: 4, sub: '2 + 2', object: 'opp',
+    scene: [{ role: 'red' }, { role: 'opp' }, { role: 'cue', badge: 'inoff' }] },
 ];
 
 class BilliardsGame {
