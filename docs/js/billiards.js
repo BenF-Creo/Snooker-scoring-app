@@ -18,6 +18,7 @@ class BilliardsGame {
     this.highBreaks = [0, 0];
     this.isOver = false;
     this.winner = null;
+    this.breaks = [];   // completed visits this game: {player, value, scored, frame, t}
     this.undoStack = [];
   }
 
@@ -36,6 +37,7 @@ class BilliardsGame {
     this.currentBreak += stroke.value;
     this.highBreaks[p] = Math.max(this.highBreaks[p], this.currentBreak);
     if (this.target && this.scores[p] >= this.target) {
+      this._recordVisit();
       this.isOver = true;
       this.winner = p;
     }
@@ -44,6 +46,7 @@ class BilliardsGame {
   endTurn() {
     if (this.isOver) return;
     this._pushUndo();
+    this._recordVisit();
     this.currentBreak = 0;
     this.currentPlayer = 1 - this.currentPlayer;
   }
@@ -51,6 +54,7 @@ class BilliardsGame {
   finishGame() {
     if (this.isOver) return;
     this._pushUndo();
+    this._recordVisit();
     this.isOver = true;
     this.winner = this.scores[0] === this.scores[1]
       ? null
@@ -64,6 +68,16 @@ class BilliardsGame {
     return true;
   }
 
+  _recordVisit() {
+    this.breaks.push({
+      player: this.currentPlayer,
+      value: this.currentBreak,
+      scored: this.currentBreak > 0,
+      frame: null,
+      t: Date.now(),
+    });
+  }
+
   _pushUndo() {
     this.undoStack.push(JSON.stringify({
       scores: this.scores.slice(),
@@ -72,6 +86,7 @@ class BilliardsGame {
       highBreaks: this.highBreaks.slice(),
       isOver: this.isOver,
       winner: this.winner,
+      breaks: this.breaks.slice(),
     }));
     if (this.undoStack.length > 500) this.undoStack.shift();
   }

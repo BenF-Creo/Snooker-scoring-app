@@ -78,6 +78,11 @@
           <span>Players</span>
           <strong id="home-players">Player 1 &amp; Player 2</strong>
         </button>
+
+        <button class="home__players" data-nav="stats">
+          <span>Statistics</span>
+          <strong>Breaks, averages &amp; consistency</strong>
+        </button>
       </div>
     </section>
 
@@ -86,6 +91,16 @@
 
     <!-- BILLIARDS (rendered by JS) -->
     <section class="screen" id="screen-billiards"></section>
+
+    <!-- STATISTICS -->
+    <section class="screen" id="screen-stats">
+      <header class="appbar">
+        <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
+        <div class="appbar__title">Statistics</div>
+        <span class="appbar__btn appbar__btn--ghost"></span>
+      </header>
+      <div class="screen__body" id="stats-body"></div>
+    </section>
 
     <!-- SETTINGS -->
     <section class="screen" id="screen-settings">

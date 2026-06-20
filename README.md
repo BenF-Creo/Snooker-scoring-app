@@ -23,6 +23,10 @@ offline like a real app.
 - **Rules section** for each game, written in plain English.
 - **Two players with names** — set them once; they apply to both games and are
   remembered between sessions.
+- **Break-building statistics** (all-time): highest break, 20+/50+/century
+  counts, average break, points per visit, consistency (% of visits that
+  scored), a break-size distribution, and a break-by-break log — per player,
+  for both games.
 - **In-progress games are auto-saved**, so a refresh won't lose your score.
 - **Installable / offline** via a web app manifest and service worker.
 

@@ -19,6 +19,7 @@ class SnookerGame {
     this.framesWon = [0, 0];
     this.frameNumber = 1;
     this.startingPlayer = 0;
+    this.breaks = [];   // completed visits this match: {player, value, scored, frame, t}
     this.undoStack = [];
     this.resetFrame();
   }
@@ -111,6 +112,7 @@ class SnookerGame {
   endTurn() {
     if (this.frame.isOver) return;
     this._pushUndo();
+    this._recordVisit();
     this._switchPlayer();
   }
 
@@ -118,6 +120,7 @@ class SnookerGame {
     const f = this.frame;
     if (f.isOver) return;
     this._pushUndo();
+    this._recordVisit();                                  // the offender's break ends here
     f.scores[1 - f.currentPlayer] += Math.max(4, points);
     this._switchPlayer();
   }
@@ -138,6 +141,7 @@ class SnookerGame {
   }
 
   restartFrame() {
+    this.breaks = this.breaks.filter(b => b.frame !== this.frameNumber);
     this.resetFrame();
     this.undoStack = [];
   }
@@ -148,6 +152,7 @@ class SnookerGame {
     const o = JSON.parse(snap);
     this.frame = o.frame;
     this.framesWon = o.framesWon;
+    this.breaks = o.breaks || [];
     return true;
   }
 
@@ -163,13 +168,25 @@ class SnookerGame {
 
   _finishFrame(winner) {
     const f = this.frame;
+    this._recordVisit();          // the player at the table ends their final visit
     f.winner = winner;
     f.isOver = true;
     this.framesWon[winner] += 1;
   }
 
+  _recordVisit() {
+    const f = this.frame;
+    this.breaks.push({
+      player: f.currentPlayer,
+      value: f.currentBreak,
+      scored: f.currentBreak > 0,
+      frame: this.frameNumber,
+      t: Date.now(),
+    });
+  }
+
   _pushUndo() {
-    this.undoStack.push(JSON.stringify({ frame: this.frame, framesWon: this.framesWon }));
+    this.undoStack.push(JSON.stringify({ frame: this.frame, framesWon: this.framesWon, breaks: this.breaks }));
     if (this.undoStack.length > 300) this.undoStack.shift();
   }
 }

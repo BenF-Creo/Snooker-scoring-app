@@ -1,5 +1,5 @@
 /* Minimal offline cache for the app shell. */
-const CACHE = 'cue-scorer-v4';
+const CACHE = 'cue-scorer-v5';
 const ASSETS = [
   './',
   'index.html',
