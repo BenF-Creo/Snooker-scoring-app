@@ -86,16 +86,21 @@
         </label>
 
         <label class="field">
+          <span class="field__label">Snooker — number of reds</span>
+          <select id="set-reds" class="field__input"></select>
+        </label>
+
+        <label class="field">
           <span class="field__label">Snooker — match length</span>
           <select id="set-bestof" class="field__input"></select>
         </label>
 
         <label class="field">
           <span class="field__label">Billiards — target score</span>
-          <select id="set-target" class="field__input"></select>
+          <input id="set-target" class="field__input" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 100 — leave blank for no limit" />
         </label>
 
-        <p class="form__note">Names apply to both games. Changing a game length or target affects the next new game you start.</p>
+        <p class="form__note">Names apply to both games. Changing the reds, match length or target updates a game that hasn’t started yet, otherwise it applies to the next new game.</p>
 
         <button class="btn btn--primary btn--block" data-nav="home">Done</button>
       </div>
@@ -122,7 +127,7 @@
           <li><span class="chip chip--pink"></span>Pink — 6</li>
           <li><span class="chip chip--black"></span>Black — 7</li>
         </ul>
-        <p>There are 15 reds and the 6 colours.</p>
+        <p>The standard game has 15 reds and the 6 colours; you can switch to the shorter 10-red game in Players &amp; Setup.</p>
 
         <h3>Playing a frame</h3>
         <ol>

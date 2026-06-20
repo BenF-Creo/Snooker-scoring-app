@@ -3,7 +3,7 @@
 const KEYS = { settings: 'cue_settings', snooker: 'cue_snooker', billiards: 'cue_billiards' };
 
 const App = {
-  settings: { playerNames: ['Player 1', 'Player 2'], snookerBestOf: 5, billiardsTarget: 100 },
+  settings: { playerNames: ['Player 1', 'Player 2'], snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100 },
   snooker: null,
   billiards: null,
   currentScreen: 'home',
@@ -26,7 +26,7 @@ const App = {
   },
 
   newSnooker() {
-    this.snooker = new SnookerGame(this.settings.snookerBestOf);
+    this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds);
     this.saveGames();
   },
 
@@ -74,16 +74,16 @@ const App = {
     document.getElementById('set-name-0').value = this.settings.playerNames[0] === 'Player 1' ? '' : this.settings.playerNames[0];
     document.getElementById('set-name-1').value = this.settings.playerNames[1] === 'Player 2' ? '' : this.settings.playerNames[1];
 
+    const reds = document.getElementById('set-reds');
+    reds.innerHTML = [15, 10].map(n => `<option value="${n}">${n} reds${n === 15 ? ' (standard)' : ' (short game)'}</option>`).join('');
+    reds.value = String(this.settings.snookerReds);
+
     const bestOf = document.getElementById('set-bestof');
     bestOf.innerHTML = [1, 3, 5, 7, 9, 11, 15, 19, 25, 35]
       .map(n => `<option value="${n}">Best of ${n} (first to ${Math.floor(n / 2) + 1})</option>`).join('');
     bestOf.value = String(this.settings.snookerBestOf);
 
-    const target = document.getElementById('set-target');
-    const opts = [100, 150, 200, 300, 500].map(n => `<option value="${n}">${n} points</option>`);
-    opts.push('<option value="0">No limit</option>');
-    target.innerHTML = opts.join('');
-    target.value = String(this.settings.billiardsTarget || 0);
+    document.getElementById('set-target').value = this.settings.billiardsTarget ? String(this.settings.billiardsTarget) : '';
   },
 
   _bindSettingsForm() {
@@ -96,15 +96,38 @@ const App = {
     document.getElementById('set-name-0').addEventListener('input', e => onName(0, e.target));
     document.getElementById('set-name-1').addEventListener('input', e => onName(1, e.target));
 
+    document.getElementById('set-reds').addEventListener('change', e => {
+      this.settings.snookerReds = parseInt(e.target.value, 10) === 10 ? 10 : 15;
+      this._saveSettings();
+      this._refreshPristineGames();
+    });
     document.getElementById('set-bestof').addEventListener('change', e => {
       this.settings.snookerBestOf = parseInt(e.target.value, 10);
       this._saveSettings();
+      this._refreshPristineGames();
     });
-    document.getElementById('set-target').addEventListener('change', e => {
-      const v = parseInt(e.target.value, 10);
-      this.settings.billiardsTarget = v === 0 ? null : v;
+    document.getElementById('set-target').addEventListener('input', e => {
+      const raw = e.target.value.trim();
+      const v = parseInt(raw, 10);
+      this.settings.billiardsTarget = (raw === '' || isNaN(v) || v <= 0) ? null : v;
       this._saveSettings();
+      this._refreshPristineGames();
     });
+  },
+
+  // Apply length/reds/target changes to a game that hasn't been scored yet, so
+  // the setting feels live; an in-progress game is left untouched.
+  _refreshPristineGames() {
+    const s = this.snooker;
+    if (s && s.frameNumber === 1 && s.framesWon[0] === 0 && s.framesWon[1] === 0 &&
+        s.frame.scores[0] === 0 && s.frame.scores[1] === 0 && !s.frame.isOver) {
+      this.newSnooker();
+    }
+    const b = this.billiards;
+    if (b && b.scores[0] === 0 && b.scores[1] === 0 && !b.isOver) {
+      this.newBilliards();
+    }
+    this._renderActive();
   },
 
   _updateHomePlayers() {
@@ -317,12 +340,16 @@ function renderBilliards() {
       </div>`;
   }).join('');
 
-  const strokes = BILLIARDS_STROKES.map(s => `
+  const strokes = BILLIARDS_STROKES.map(s => {
+    const balls = s.balls.map(c => `<span class="bball bball--${c}"></span>`).join('');
+    return `
       <button class="stroke" data-action="score" data-key="${s.key}" ${g.isOver ? 'disabled' : ''}>
-        <span class="stroke__val">+${s.value}</span>
+        <span class="stroke__balls">${balls}</span>
         <span class="stroke__label">${s.label}</span>
+        <span class="stroke__val">+${s.value}</span>
         <span class="stroke__sub">${s.sub}</span>
-      </button>`).join('');
+      </button>`;
+  }).join('');
 
   document.getElementById('screen-billiards').innerHTML = `
     <header class="appbar">

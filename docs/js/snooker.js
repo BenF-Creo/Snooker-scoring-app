@@ -13,8 +13,9 @@ const SNOOKER_BALLS = [
 function ballByValue(v) { return SNOOKER_BALLS.find(b => b.value === v); }
 
 class SnookerGame {
-  constructor(bestOf) {
+  constructor(bestOf, reds) {
     this.bestOf = bestOf || 5;
+    this.reds = (reds === 10) ? 10 : 15;   // standard 15, or the shorter 10-red game
     this.framesWon = [0, 0];
     this.frameNumber = 1;
     this.startingPlayer = 0;
@@ -33,7 +34,7 @@ class SnookerGame {
   resetFrame() {
     this.frame = {
       scores: [0, 0],
-      redsRemaining: 15,
+      redsRemaining: this.reds,
       phase: { type: 'red' },          // 'red' | 'colour' | 'sequence'(value)
       currentPlayer: this.startingPlayer,
       currentBreak: 0,

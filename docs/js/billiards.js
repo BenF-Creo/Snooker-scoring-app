@@ -1,11 +1,11 @@
 /* English Billiards rule engine — plain data + methods, no DOM. */
 
 const BILLIARDS_STROKES = [
-  { key: 'cannon',     label: 'Cannon',      value: 2, sub: 'hit both balls' },
-  { key: 'potRed',     label: 'Pot Red',     value: 3, sub: 'winning hazard' },
-  { key: 'inOffRed',   label: 'In-off Red',  value: 3, sub: 'losing hazard' },
-  { key: 'potWhite',   label: 'Pot White',   value: 2, sub: "opponent's ball" },
-  { key: 'inOffWhite', label: 'In-off White', value: 2, sub: 'off the white' },
+  { key: 'cannon',     label: 'Cannon',      value: 2, sub: 'hit both balls',   balls: ['red', 'white'] },
+  { key: 'potRed',     label: 'Pot Red',     value: 3, sub: 'winning hazard',   balls: ['red'] },
+  { key: 'inOffRed',   label: 'In-off Red',  value: 3, sub: 'losing hazard',    balls: ['white', 'red'] },
+  { key: 'potWhite',   label: 'Pot White',   value: 2, sub: "opponent's ball",  balls: ['white'] },
+  { key: 'inOffWhite', label: 'In-off White', value: 2, sub: 'off the white',   balls: ['white', 'white'] },
 ];
 
 class BilliardsGame {
