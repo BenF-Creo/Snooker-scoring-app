@@ -313,6 +313,7 @@ const App = {
         case 'home': showScreen('home'); break;
         case 'rules': showScreen('rules-billiards'); break;
         case 'breaker': g.setBreaker(+t.dataset.seat); afterBilliards(); break;
+        case 'swapcue': g.swapCues(); afterBilliards(); break;
         case 'score': g.score(t.dataset.key); afterBilliards(); break;
         case 'endturn': g.endTurn(); afterBilliards(); break;
         case 'undo': g.undo(); afterBilliards(); break;
@@ -408,6 +409,19 @@ function closeOverlay() {
 /* ---------- snooker rendering ---------- */
 
 function afterSnooker() { App.saveGames(); renderSnooker(); }
+
+// Cue-ball chooser (billiards) shown before a game has started.
+function cueChooser(g) {
+  const cues = g.cues || ['white', 'yellow'];
+  return `<div class="breakoff">
+      <span class="breakoff__label">Cue balls</span>
+      <button class="cueswap" data-action="swapcue">
+        <span class="cueswap__p">${escapeHtml(App.gamePlayerName(g, 0))} <span class="cuedot cuedot--${cues[0]}"></span></span>
+        <span class="cueswap__icon">⇄</span>
+        <span class="cueswap__p"><span class="cuedot cuedot--${cues[1]}"></span> ${escapeHtml(App.gamePlayerName(g, 1))}</span>
+      </button>
+    </div>`;
+}
 
 // Break-off chooser shown before a frame/game has started.
 function breakoffChooser(g, name) {
@@ -545,10 +559,13 @@ function showSnookerResult() {
 
 function afterBilliards() { App.saveGames(); renderBilliards(); }
 
+function cueDot(color) { return `<span class="cuedot cuedot--${color}"></span>`; }
+
 function renderBilliards() {
   const g = App.billiards;
   if (!g) return;
   const name = i => escapeHtml(App.gamePlayerName(g, i));
+  const cues = g.cues || ['white', 'yellow'];
 
   const panels = [0, 1].map(i => {
     const active = !g.isOver && g.currentPlayer === i;
@@ -560,19 +577,29 @@ function renderBilliards() {
         <div class="stat"><span class="stat__value">${g.highBreaks[i]}</span><span class="stat__label">High break</span></div>
         ${toGo !== null ? `<div class="stat"><span class="stat__value">${toGo}</span><span class="stat__label">To go</span></div>` : ''}`;
     return `<div class="panel ${active ? 'panel--active' : ''}">
-        <div class="panel__name">${name(i)}</div>
+        <div class="panel__name">${cueDot(cues[i])} ${name(i)}</div>
         <div class="panel__score ${leading ? 'is-leading' : ''}">${g.scores[i]}</div>
         <div class="panel__turn">${turn}</div>
         <div class="panel__stats">${stats}</div>
       </div>`;
   }).join('');
 
+  // Stroke buttons drawn from the current striker's point of view.
+  const cue = cues[g.currentPlayer];
+  const opp = cues[1 - g.currentPlayer];
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const strokes = BILLIARDS_STROKES.map(s => {
-    const balls = s.balls.map(c => `<span class="bball bball--${c}"></span>`).join('');
+    const label = s.object === 'opp' ? `${s.base} ${cap(opp)}` : s.base;
+    const scene = s.scene.map(part => {
+      const color = part.role === 'red' ? 'red' : (part.role === 'cue' ? cue : opp);
+      const badge = part.badge === 'pot' ? '<span class="bbadge bbadge--pot">P</span>'
+        : part.badge === 'inoff' ? '<span class="bbadge bbadge--inoff">↘</span>' : '';
+      return `<span class="bball bball--${color}">${badge}</span>`;
+    }).join('');
     return `
       <button class="stroke" data-action="score" data-key="${s.key}" ${g.isOver ? 'disabled' : ''}>
-        <span class="stroke__balls">${balls}</span>
-        <span class="stroke__label">${s.label}</span>
+        <span class="stroke__balls">${scene}</span>
+        <span class="stroke__label">${escapeHtml(label)}</span>
         <span class="stroke__val">+${s.value}</span>
         <span class="stroke__sub">${s.sub}</span>
       </button>`;
@@ -587,7 +614,7 @@ function renderBilliards() {
     <div class="screen__body">
       <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}</span></div>
       <div class="panels">${panels}</div>
-      ${g.frameFresh ? breakoffChooser(g, name) : ''}
+      ${g.frameFresh ? breakoffChooser(g, name) + cueChooser(g) : ''}
       <div class="strokes">${strokes}</div>
       <div class="actions">
         <button class="act act--primary" data-action="endturn" ${g.isOver ? 'disabled' : ''}>End Break</button>

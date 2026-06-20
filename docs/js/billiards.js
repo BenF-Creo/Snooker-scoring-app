@@ -1,11 +1,21 @@
 /* English Billiards rule engine — plain data + methods, no DOM. */
 
+/* Each stroke's `scene` describes how to draw it: a row of balls by role
+   ('cue' = striker's ball, 'opp' = opponent's ball, 'red'), with an optional
+   badge — 'pot' (P, the object ball is pocketed) or 'inoff' (arrow, the cue
+   ball is pocketed). `object: 'opp'` means the named ball is the opponent's,
+   so the label reflects its actual colour (white or yellow). */
 const BILLIARDS_STROKES = [
-  { key: 'cannon',     label: 'Cannon',      value: 2, sub: 'hit both balls',   balls: ['red', 'white'] },
-  { key: 'potRed',     label: 'Pot Red',     value: 3, sub: 'winning hazard',   balls: ['red'] },
-  { key: 'inOffRed',   label: 'In-off Red',  value: 3, sub: 'losing hazard',    balls: ['white', 'red'] },
-  { key: 'potWhite',   label: 'Pot White',   value: 2, sub: "opponent's ball",  balls: ['white'] },
-  { key: 'inOffWhite', label: 'In-off White', value: 2, sub: 'off the white',   balls: ['white', 'white'] },
+  { key: 'cannon',     base: 'Cannon',  value: 2, sub: 'hit both balls',
+    scene: [{ role: 'cue' }, { role: 'red' }, { role: 'opp' }] },
+  { key: 'potRed',     base: 'Pot Red', value: 3, sub: 'winning hazard',
+    scene: [{ role: 'cue' }, { role: 'red', badge: 'pot' }] },
+  { key: 'inOffRed',   base: 'In-off Red', value: 3, sub: 'losing hazard',
+    scene: [{ role: 'red' }, { role: 'cue', badge: 'inoff' }] },
+  { key: 'potWhite',   base: 'Pot', value: 2, sub: "opponent's ball", object: 'opp',
+    scene: [{ role: 'cue' }, { role: 'opp', badge: 'pot' }] },
+  { key: 'inOffWhite', base: 'In-off', value: 2, sub: "off opponent's ball", object: 'opp',
+    scene: [{ role: 'opp' }, { role: 'cue', badge: 'inoff' }] },
 ];
 
 class BilliardsGame {
@@ -21,8 +31,21 @@ class BilliardsGame {
     this.breaker = 0;   // who broke off / started
     this.scored = false;
     this.visits = 0;
+    this.cues = ['white', 'yellow'];   // cue ball colour per seat (mutually exclusive)
     this.breaks = [];   // completed visits this game: {player, value, scored, opening, breakOff, t}
     this.undoStack = [];
+  }
+
+  // Assign a cue ball to a seat; the other seat automatically gets the other.
+  setCue(seat, color) {
+    seat = seat ? 1 : 0;
+    const c = (color === 'yellow') ? 'yellow' : 'white';
+    this.cues[seat] = c;
+    this.cues[1 - seat] = (c === 'white') ? 'yellow' : 'white';
+  }
+
+  swapCues() {
+    this.cues = [this.cues[1], this.cues[0]];
   }
 
   get frameFresh() {
