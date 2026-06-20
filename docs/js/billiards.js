@@ -16,6 +16,8 @@ const BILLIARDS_STROKES = [
     scene: [{ role: 'cue' }, { role: 'opp', badge: 'pot' }] },
   { key: 'inOffWhite', base: 'In-off', value: 2, sub: "off opponent's ball", object: 'opp',
     scene: [{ role: 'opp' }, { role: 'cue', badge: 'inoff' }] },
+  { key: 'five',       base: 'Five', value: 5, sub: 'cannon + in-off red',
+    scene: [{ role: 'opp' }, { role: 'red' }, { role: 'cue', badge: 'inoff' }] },
 ];
 
 class BilliardsGame {
