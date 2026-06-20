@@ -18,8 +18,23 @@ class BilliardsGame {
     this.highBreaks = [0, 0];
     this.isOver = false;
     this.winner = null;
-    this.breaks = [];   // completed visits this game: {player, value, scored, frame, t}
+    this.breaker = 0;   // who broke off / started
+    this.scored = false;
+    this.visits = 0;
+    this.breaks = [];   // completed visits this game: {player, value, scored, opening, breakOff, t}
     this.undoStack = [];
+  }
+
+  get frameFresh() {
+    return !this.isOver && this.visits === 0 && this.currentBreak === 0 &&
+      this.scores[0] === 0 && this.scores[1] === 0;
+  }
+
+  setBreaker(seat) {
+    if (!this.frameFresh) return;
+    seat = seat ? 1 : 0;
+    this.currentPlayer = seat;
+    this.breaker = seat;
   }
 
   pointsToGo(player) {
@@ -69,13 +84,18 @@ class BilliardsGame {
   }
 
   _recordVisit() {
+    const opening = !this.scored && this.currentBreak === 0;
     this.breaks.push({
       player: this.currentPlayer,
       value: this.currentBreak,
       scored: this.currentBreak > 0,
       frame: null,
+      opening: opening,
+      breakOff: this.visits === 0,
       t: Date.now(),
     });
+    this.visits += 1;
+    if (this.currentBreak > 0) this.scored = true;
   }
 
   _pushUndo() {
@@ -86,6 +106,9 @@ class BilliardsGame {
       highBreaks: this.highBreaks.slice(),
       isOver: this.isOver,
       winner: this.winner,
+      breaker: this.breaker,
+      scored: this.scored,
+      visits: this.visits,
       breaks: this.breaks.slice(),
     }));
     if (this.undoStack.length > 500) this.undoStack.shift();

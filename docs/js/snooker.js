@@ -40,9 +40,28 @@ class SnookerGame {
       currentPlayer: this.startingPlayer,
       currentBreak: 0,
       highBreaks: [0, 0],
+      breaker: this.startingPlayer,    // who broke off this frame
+      scored: false,                   // has a pot been made yet this frame
+      visits: 0,                       // visits recorded this frame
       isOver: false,
       winner: null,
     };
+  }
+
+  // Whether the frame is still at the opening break-off (nothing has happened).
+  get frameFresh() {
+    const f = this.frame;
+    return !f.isOver && f.visits === 0 && f.currentBreak === 0 &&
+      f.scores[0] === 0 && f.scores[1] === 0;
+  }
+
+  // Set who breaks off — only allowed before the frame has started.
+  setBreaker(seat) {
+    if (!this.frameFresh) return;
+    seat = seat ? 1 : 0;
+    this.startingPlayer = seat;
+    this.frame.currentPlayer = seat;
+    this.frame.breaker = seat;
   }
 
   // --- queries ---
@@ -176,13 +195,19 @@ class SnookerGame {
 
   _recordVisit() {
     const f = this.frame;
+    // "Opening" = a safety/break-off visit before the first pot of the frame.
+    const opening = !f.scored && f.currentBreak === 0;
     this.breaks.push({
       player: f.currentPlayer,
       value: f.currentBreak,
       scored: f.currentBreak > 0,
       frame: this.frameNumber,
+      opening: opening,
+      breakOff: f.visits === 0,        // the frame's first visit is the break-off
       t: Date.now(),
     });
+    f.visits += 1;
+    if (f.currentBreak > 0) f.scored = true;
   }
 
   _pushUndo() {

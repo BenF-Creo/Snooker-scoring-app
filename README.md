@@ -30,6 +30,10 @@ offline like a real app.
 - **Leaderboard** ranking every player by highest break, centuries, average,
   breaks made or consistency, for either game.
 - The live scoreboard shows each player's **match-high break**.
+- **Break-off & opening safety:** choose who breaks off each frame/game; visits
+  before the first pot are logged as opening safety and excluded from break
+  averages and consistency, so safety play doesn't skew the stats.
+- **In-depth rules** for both games, including the different fouls.
 - **In-progress games are auto-saved**, so a refresh won't lose your score.
 - **Installable / offline** via a web app manifest and service worker.
 

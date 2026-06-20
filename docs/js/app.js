@@ -123,7 +123,7 @@ const App = {
     const stats = this.loadStats();
     game.breaks.forEach(b => {
       const pid = this._seatId(game, b.player);
-      stats.log.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || Date.now() });
+      stats.log.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, opening: !!b.opening, breakOff: !!b.breakOff, t: b.t || Date.now() });
     });
     if (stats.log.length > 5000) stats.log = stats.log.slice(-5000);
     this.saveStats(stats);
@@ -137,7 +137,7 @@ const App = {
       if (!game || !game.breaks) return;
       game.breaks.forEach(b => {
         const pid = this._seatId(game, b.player);
-        out.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, t: b.t || 0 });
+        out.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, opening: !!b.opening, breakOff: !!b.breakOff, t: b.t || 0 });
       });
     };
     live(this.snooker, 'snooker');
@@ -294,6 +294,7 @@ const App = {
       switch (t.dataset.action) {
         case 'home': showScreen('home'); break;
         case 'rules': showScreen('rules-snooker'); break;
+        case 'breaker': g.setBreaker(+t.dataset.seat); afterSnooker(); break;
         case 'pot': g.pot(t.dataset.key); afterSnooker(); break;
         case 'endturn': g.endTurn(); afterSnooker(); break;
         case 'foul': openFoulModal(); break;
@@ -311,6 +312,7 @@ const App = {
       switch (t.dataset.action) {
         case 'home': showScreen('home'); break;
         case 'rules': showScreen('rules-billiards'); break;
+        case 'breaker': g.setBreaker(+t.dataset.seat); afterBilliards(); break;
         case 'score': g.score(t.dataset.key); afterBilliards(); break;
         case 'endturn': g.endTurn(); afterBilliards(); break;
         case 'undo': g.undo(); afterBilliards(); break;
@@ -407,6 +409,18 @@ function closeOverlay() {
 
 function afterSnooker() { App.saveGames(); renderSnooker(); }
 
+// Break-off chooser shown before a frame/game has started.
+function breakoffChooser(g, name) {
+  const seat = g.frame ? g.frame.currentPlayer : g.currentPlayer;
+  return `<div class="breakoff">
+      <span class="breakoff__label">Who breaks off?</span>
+      <div class="seg seg--mini">
+        <button class="seg__btn ${seat === 0 ? 'seg__btn--active' : ''}" data-action="breaker" data-seat="0">${name(0)}</button>
+        <button class="seg__btn ${seat === 1 ? 'seg__btn--active' : ''}" data-action="breaker" data-seat="1">${name(1)}</button>
+      </div>
+    </div>`;
+}
+
 // Best break this match for a seat: recorded visits plus the live break.
 function snookerMatchHigh(g, seat) {
   let hi = 0;
@@ -469,10 +483,11 @@ function renderSnooker() {
     <div class="screen__body">
       <div class="tally"><span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> frames</span><span class="tally__sep">First to ${g.framesToWin}</span></div>
       <div class="panels">${panels}</div>
+      ${g.frameFresh ? breakoffChooser(g, name) : `
       <div class="status">
         <div class="status__next"><span class="status__label">Next</span>${nextDot}<span class="status__text">${nextText}</span></div>
         <div class="status__remain"><b>${g.pointsRemaining()}</b> remaining</div>
-      </div>
+      </div>`}
       <div class="balls">${balls}</div>
       <div class="actions">
         <button class="act act--primary" data-action="endturn" ${f.isOver ? 'disabled' : ''}>End Turn</button>
@@ -572,6 +587,7 @@ function renderBilliards() {
     <div class="screen__body">
       <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}</span></div>
       <div class="panels">${panels}</div>
+      ${g.frameFresh ? breakoffChooser(g, name) : ''}
       <div class="strokes">${strokes}</div>
       <div class="actions">
         <button class="act act--primary" data-action="endturn" ${g.isOver ? 'disabled' : ''}>End Break</button>
@@ -624,7 +640,10 @@ function recordsForProfile(records, profile) {
 }
 
 function aggregateBreaks(records, profile) {
-  const visits = recordsForProfile(records, profile);
+  const all = recordsForProfile(records, profile);
+  // Exclude opening safety / break-off visits (before the first pot of a frame)
+  // so they don't drag down averages and consistency.
+  const visits = all.filter(r => !r.opening);
   const scoring = visits.filter(r => r.v > 0);
   const values = scoring.map(r => r.v);
   const sum = values.reduce((a, b) => a + b, 0);
@@ -640,6 +659,8 @@ function aggregateBreaks(records, profile) {
     c100: values.filter(v => v >= 100).length,
     consistency: visits.length ? (scoring.length / visits.length * 100) : 0,
     buckets: bucketize(values),
+    breakOffs: all.filter(r => r.breakOff).length,
+    safeties: all.filter(r => r.opening).length,
   };
 }
 
@@ -671,7 +692,8 @@ function statDetail(a) {
     ['Centuries (100+)', a.c100],
     ['Breaks 50+ / 20+', `${a.c50} / ${a.c20}`],
     ['Consistency', a.visits ? Math.round(a.consistency) + '%' : '—'],
-    ['Total visits', a.visits],
+    ['Break-offs', a.breakOffs],
+    ['Visits (after opening)', a.visits],
   ].map(([k, v]) => `<div class="srow"><span>${k}</span><b>${v}</b></div>`).join('');
 
   const maxB = Math.max(1, a.buckets[0], a.buckets[1], a.buckets[2], a.buckets[3], a.buckets[4]);
