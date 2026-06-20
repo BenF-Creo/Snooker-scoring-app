@@ -139,7 +139,8 @@ class SnookerGame {
     const f = this.frame;
     if (f.isOver) return;
     this._pushUndo();
-    this._recordVisit();                                  // the offender's break ends here
+    f.scored = true;                 // a foul puts points on the board: opening phase ends
+    this._recordVisit();             // the offender's visit ends here (counts as normal play)
     f.scores[1 - f.currentPlayer] += Math.max(4, points);
     this._switchPlayer();
   }
