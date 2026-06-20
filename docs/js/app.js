@@ -2,6 +2,13 @@
 
 const KEYS = { settings: 'cue_settings', snooker: 'cue_snooker', billiards: 'cue_billiards' };
 
+const ICONS = {
+  back: '<svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+  trophy: '<svg class="ico ico--lg" viewBox="0 0 24 24"><path d="M8 4.5h8v4a4 4 0 0 1-8 0v-4Z"/><path d="M8 6H5.5v1A3 3 0 0 0 8.5 10"/><path d="M16 6h2.5v1A3 3 0 0 1 15.5 10"/><path d="M12 12.5V16"/><path d="M9.5 19.5h5"/><path d="M10.5 19.5l.4-3.5h2.2l.4 3.5"/></svg>',
+  check: '<svg class="ico ico--lg" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
+  draw: '<svg class="ico ico--lg" viewBox="0 0 24 24"><path d="M5 9.5h14M5 14.5h14"/></svg>',
+};
+
 const App = {
   settings: { playerNames: ['Player 1', 'Player 2'], snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100 },
   snooker: null,
@@ -240,11 +247,16 @@ function renderSnooker() {
   const panels = [0, 1].map(i => {
     const active = !f.isOver && f.currentPlayer === i;
     const leading = g.leader() === i && f.scores[0] !== f.scores[1];
+    const turn = !active ? '&nbsp;'
+      : (f.currentBreak > 0 ? `<span class="panel__turn--break">Break ${f.currentBreak}</span>` : 'At table');
     return `<div class="panel ${active ? 'panel--active' : ''}">
-        <div class="panel__name">${active ? '<span class="dot"></span>' : ''}${name(i)}</div>
+        <div class="panel__name">${name(i)}</div>
         <div class="panel__score ${leading ? 'is-leading' : ''}">${f.scores[i]}</div>
-        <div class="panel__meta"><span>🏆 ${g.framesWon[i]}</span><span>🔥 ${f.highBreaks[i]}</span></div>
-        ${active && f.currentBreak > 0 ? `<div class="panel__break">Break ${f.currentBreak}</div>` : ''}
+        <div class="panel__turn">${turn}</div>
+        <div class="panel__stats">
+          <div class="stat"><span class="stat__value">${g.framesWon[i]}</span><span class="stat__label">Frames</span></div>
+          <div class="stat"><span class="stat__value">${f.highBreaks[i]}</span><span class="stat__label">High break</span></div>
+        </div>
       </div>`;
   }).join('');
 
@@ -256,21 +268,38 @@ function renderSnooker() {
       </button>`;
   }).join('');
 
+  // Next-ball indicator
+  let nextText, nextDot = '';
+  if (f.isOver) {
+    nextText = 'Frame over';
+  } else if (f.phase.type === 'red') {
+    nextText = 'Red'; nextDot = '<span class="dot-ball chip--red"></span>';
+  } else if (f.phase.type === 'colour') {
+    nextText = 'Any colour';
+  } else {
+    const b = ballByValue(f.phase.value);
+    nextText = b ? b.name : '';
+    nextDot = b ? `<span class="dot-ball chip--${b.key}"></span>` : '';
+  }
+
   document.getElementById('screen-snooker').innerHTML = `
     <header class="appbar">
-      <button class="appbar__btn" data-action="home">‹ Menu</button>
+      <button class="appbar__btn appbar__btn--icon" data-action="home">${ICONS.back}<span>Menu</span></button>
       <div class="appbar__title">Frame ${g.frameNumber} · Best of ${g.bestOf}</div>
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
-      <div class="tally"><span><b>${g.framesWon[0]}</b> frames <b>${g.framesWon[1]}</b></span><span>First to ${g.framesToWin}</span></div>
+      <div class="tally"><span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> frames</span><span class="tally__sep">First to ${g.framesToWin}</span></div>
       <div class="panels">${panels}</div>
-      <div class="status"><span>🎯 ${g.nextUp()}</span><span>${g.pointsRemaining()} pts left</span></div>
+      <div class="status">
+        <div class="status__next"><span class="status__label">Next</span>${nextDot}<span class="status__text">${nextText}</span></div>
+        <div class="status__remain"><b>${g.pointsRemaining()}</b> remaining</div>
+      </div>
       <div class="balls">${balls}</div>
       <div class="actions">
-        <button class="act act--blue" data-action="endturn" ${f.isOver ? 'disabled' : ''}>End Turn</button>
-        <button class="act act--orange" data-action="foul" ${f.isOver ? 'disabled' : ''}>Foul</button>
-        <button class="act act--grey" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+        <button class="act act--primary" data-action="endturn" ${f.isOver ? 'disabled' : ''}>End Turn</button>
+        <button class="act act--warn" data-action="foul" ${f.isOver ? 'disabled' : ''}>Foul</button>
+        <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
       </div>
       <div class="links">
         <button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>
@@ -304,7 +333,7 @@ function showSnookerResult() {
   const w = f.winner === null ? f.currentPlayer : f.winner;
   const matchOver = g.matchWinner !== null;
   openOverlay(`
-    <div class="result__icon">${matchOver ? '🏆' : '✅'}</div>
+    <div class="result__badge">${matchOver ? ICONS.trophy : ICONS.check}</div>
     <h3>${matchOver ? 'Match Won' : 'Frame Won'}</h3>
     <div class="result__name">${escapeHtml(App.playerName(w))}</div>
     <div class="result__score">${f.scores[0]} – ${f.scores[1]}</div>
@@ -332,11 +361,16 @@ function renderBilliards() {
     const active = !g.isOver && g.currentPlayer === i;
     const leading = g.scores[i] > g.scores[1 - i];
     const toGo = g.pointsToGo(i);
+    const turn = !active ? '&nbsp;'
+      : (g.currentBreak > 0 ? `<span class="panel__turn--break">Break ${g.currentBreak}</span>` : 'At table');
+    const stats = `
+        <div class="stat"><span class="stat__value">${g.highBreaks[i]}</span><span class="stat__label">High break</span></div>
+        ${toGo !== null ? `<div class="stat"><span class="stat__value">${toGo}</span><span class="stat__label">To go</span></div>` : ''}`;
     return `<div class="panel ${active ? 'panel--active' : ''}">
-        <div class="panel__name">${active ? '<span class="dot"></span>' : ''}${name(i)}</div>
+        <div class="panel__name">${name(i)}</div>
         <div class="panel__score ${leading ? 'is-leading' : ''}">${g.scores[i]}</div>
-        <div class="panel__meta"><span>🔥 ${g.highBreaks[i]}</span>${toGo !== null ? `<span>${toGo} to go</span>` : ''}</div>
-        ${active && g.currentBreak > 0 ? `<div class="panel__break">Break ${g.currentBreak}</div>` : ''}
+        <div class="panel__turn">${turn}</div>
+        <div class="panel__stats">${stats}</div>
       </div>`;
   }).join('');
 
@@ -353,18 +387,18 @@ function renderBilliards() {
 
   document.getElementById('screen-billiards').innerHTML = `
     <header class="appbar">
-      <button class="appbar__btn" data-action="home">‹ Menu</button>
+      <button class="appbar__btn appbar__btn--icon" data-action="home">${ICONS.back}<span>Menu</span></button>
       <div class="appbar__title">English Billiards</div>
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
-      <div class="tally"><span>${g.target ? `Target ${g.target}` : 'No target'}</span><span>${name(0)} v ${name(1)}</span></div>
+      <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}</span></div>
       <div class="panels">${panels}</div>
       <div class="strokes">${strokes}</div>
       <div class="actions">
-        <button class="act act--blue" data-action="endturn" ${g.isOver ? 'disabled' : ''}>End Break</button>
-        ${g.target ? '' : `<button class="act act--green" data-action="finish" ${g.isOver ? 'disabled' : ''}>Finish</button>`}
-        <button class="act act--grey" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+        <button class="act act--primary" data-action="endturn" ${g.isOver ? 'disabled' : ''}>End Break</button>
+        ${g.target ? '' : `<button class="act" data-action="finish" ${g.isOver ? 'disabled' : ''}>Finish</button>`}
+        <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
       </div>
       <div class="links">
         <button data-action="newgame">New game</button>
@@ -378,7 +412,7 @@ function showBilliardsResult() {
   const g = App.billiards;
   const w = g.winner;
   openOverlay(`
-    <div class="result__icon">${w === null ? '🤝' : '🏆'}</div>
+    <div class="result__badge">${w === null ? ICONS.draw : ICONS.trophy}</div>
     <h3>${w === null ? 'Game Drawn' : 'Game Won'}</h3>
     ${w === null ? '' : `<div class="result__name">${escapeHtml(App.playerName(w))}</div>`}
     <div class="result__score">${g.scores[0]} – ${g.scores[1]}</div>

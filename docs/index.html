@@ -22,14 +22,22 @@
       <header class="appbar">
         <span class="appbar__btn appbar__btn--ghost"></span>
         <div class="appbar__title">Cue Sports Scorer</div>
-        <button class="appbar__btn" data-nav="settings" aria-label="Settings">⚙︎</button>
+        <button class="appbar__btn appbar__btn--icon" data-nav="settings" aria-label="Settings">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h6M14 17h6"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="12" cy="17" r="2"/></svg>
+        </button>
       </header>
       <div class="screen__body home">
-        <p class="home__intro">Keep score for two players. Pick a game to start.</p>
+        <p class="home__intro">Two-player scoring for snooker and English billiards, with the full rules built in.</p>
 
         <div class="card card--snooker">
           <div class="card__head">
-            <span class="card__emoji">🎯</span>
+            <span class="card__art" aria-hidden="true">
+              <svg viewBox="0 0 64 64">
+                <circle cx="22" cy="25" r="11" fill="#bd3b2f"/>
+                <circle cx="43" cy="21" r="11" fill="#15171c"/>
+                <circle cx="33" cy="43" r="11" fill="#e7bb33"/>
+              </svg>
+            </span>
             <div>
               <h2 class="card__title">Snooker</h2>
               <p class="card__sub">Full rules · breaks · frames &amp; matches</p>
@@ -43,7 +51,14 @@
 
         <div class="card card--billiards">
           <div class="card__head">
-            <span class="card__emoji">🔴</span>
+            <span class="card__art" aria-hidden="true">
+              <svg viewBox="0 0 64 64">
+                <circle cx="23" cy="28" r="12" fill="#bd3b2f"/>
+                <circle cx="44" cy="24" r="12" fill="#f0ece0"/>
+                <circle cx="40" cy="45" r="9" fill="#f0ece0"/>
+                <circle cx="40" cy="45" r="2.4" fill="#15171c"/>
+              </svg>
+            </span>
             <div>
               <h2 class="card__title">English Billiards</h2>
               <p class="card__sub">Cannons, pots &amp; in-offs · play to a target</p>
@@ -71,7 +86,7 @@
     <!-- SETTINGS -->
     <section class="screen" id="screen-settings">
       <header class="appbar">
-        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
         <div class="appbar__title">Players &amp; Setup</div>
         <span class="appbar__btn appbar__btn--ghost"></span>
       </header>
@@ -109,7 +124,7 @@
     <!-- RULES: SNOOKER -->
     <section class="screen" id="screen-rules-snooker">
       <header class="appbar">
-        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
         <div class="appbar__title">Snooker Rules</div>
         <span class="appbar__btn appbar__btn--ghost"></span>
       </header>
@@ -153,7 +168,7 @@
     <!-- RULES: BILLIARDS -->
     <section class="screen" id="screen-rules-billiards">
       <header class="appbar">
-        <button class="appbar__btn" data-nav="home">‹ Menu</button>
+        <button class="appbar__btn appbar__btn--icon" data-nav="home"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Menu</span></button>
         <div class="appbar__title">Billiards Rules</div>
         <span class="appbar__btn appbar__btn--ghost"></span>
       </header>
