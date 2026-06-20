@@ -37,7 +37,10 @@ class BilliardsGame {
   }
 
   // Assign a cue ball to a seat; the other seat automatically gets the other.
+  // Only allowed before the game has started — once set, it stands for the
+  // whole game and can only change in a fresh game.
   setCue(seat, color) {
+    if (!this.frameFresh) return;
     seat = seat ? 1 : 0;
     const c = (color === 'yellow') ? 'yellow' : 'white';
     this.cues[seat] = c;
@@ -45,6 +48,7 @@ class BilliardsGame {
   }
 
   swapCues() {
+    if (!this.frameFresh) return;
     this.cues = [this.cues[1], this.cues[0]];
   }
 
