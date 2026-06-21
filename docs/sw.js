@@ -1,5 +1,6 @@
-/* Minimal offline cache for the app shell. */
-const CACHE = "cue-scorer-v14";
+/* App-shell cache with a network-first strategy so updates always come through
+   when online, while still working offline from cache. */
+const CACHE = "cue-scorer-v15";
 const ASSETS = [
   './',
   'index.html',
@@ -23,9 +24,16 @@ self.addEventListener('activate', e => {
   );
 });
 
+// Network-first: try the network, cache a fresh copy, fall back to cache offline.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
+    fetch(e.request)
+      .then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        return resp;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

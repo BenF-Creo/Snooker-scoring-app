@@ -2,19 +2,19 @@
 
 const KEYS = { settings: 'cue_settings', snooker: 'cue_snooker', billiards: 'cue_billiards', stats: 'cue_stats', profiles: 'cue_profiles' };
 
+// Leaderboard metrics operate on a full per-profile summary {breaks, frames, matches}.
+// `val` is used for ranking (higher = better; -1 hides players with no data).
 const LEADER_METRICS = [
-  { key: 'high', label: 'Highest break', fmt: a => a.high },
-  { key: 'c100', label: 'Centuries (100+)', fmt: a => a.c100 },
-  { key: 'c50', label: 'Breaks 50+', fmt: a => a.c50 },
-  { key: 'avg', label: 'Average break', fmt: a => (a.avg ? a.avg.toFixed(1) : '0') },
-  { key: 'breaks', label: 'Breaks made', fmt: a => a.breaks },
-  { key: 'consistency', label: 'Consistency', fmt: a => Math.round(a.consistency) + '%' },
+  { key: 'high',       label: 'Highest break',  val: s => s.breaks.high,            fmt: s => s.breaks.high },
+  { key: 'c100',       label: 'Centuries (100+)', val: s => s.breaks.ms[6],         fmt: s => s.breaks.ms[6] },
+  { key: 'avg',        label: 'Average break',   val: s => s.breaks.avg,            fmt: s => (s.breaks.avg ? s.breaks.avg.toFixed(1) : '0') },
+  { key: 'breaks',     label: 'Breaks made',     val: s => s.breaks.breaks,         fmt: s => s.breaks.breaks },
+  { key: 'framesWon',  label: 'Frames won',      val: s => s.frames.won,            fmt: s => s.frames.won },
+  { key: 'matchesWon', label: 'Matches won',     val: s => (s.matches ? s.matches.won : 0), fmt: s => (s.matches ? s.matches.won : 0) },
+  { key: 'winPct',     label: 'Frame win %',     val: s => (s.frames.played ? s.frames.winPct : -1), fmt: s => (s.frames.played ? Math.round(s.frames.winPct) + '%' : '—') },
+  { key: 'potPct',     label: 'Pot success %',   val: s => ((s.frames.pots + s.frames.misses) ? s.frames.potPct : -1), fmt: s => ((s.frames.pots + s.frames.misses) ? Math.round(s.frames.potPct) + '%' : '—') },
+  { key: 'consistency', label: 'Consistency',    val: s => (s.breaks.visits ? s.breaks.consistency : -1), fmt: s => (s.breaks.visits ? Math.round(s.breaks.consistency) + '%' : '—') },
 ];
-function metricValue(a, key) {
-  if (key === 'avg') return a.avg;
-  if (key === 'consistency') return a.consistency;
-  return a[key] || 0;
-}
 
 const ICONS = {
   back: '<svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
@@ -180,6 +180,44 @@ const App = {
     };
     live(this.snooker, 'snooker');
     live(this.billiards, 'billiards');
+    return out;
+  },
+
+  // Completed snooker frames = persisted + the current match's not-yet-flushed frames.
+  allFrames() {
+    const out = this.loadStats().frames.slice();
+    const g = this.snooker;
+    if (g && g.frameLog && g.frameLog.length) {
+      const pids = (g.players || this.settings.players || []);
+      g.frameLog.forEach(fr => out.push({
+        g: 'snooker', pids, winner: pids[fr.winner], scores: fr.scores,
+        durationMs: fr.durationMs, breaker: pids[fr.breaker],
+        pots: fr.pots, misses: fr.misses, safeties: fr.safeties, fouls: fr.fouls, casual: !!g.casual,
+      }));
+    }
+    return out;
+  },
+
+  allMatches() {
+    const out = this.loadStats().matches.slice();
+    const g = this.snooker;
+    if (g && g.matchWinner !== null && !g.casual) {
+      const pids = (g.players || this.settings.players || []);
+      out.push({ g: 'snooker', pids, winner: pids[g.matchWinner], framesWon: g.framesWon.slice() });
+    }
+    return out;
+  },
+
+  allBilliardsGames() {
+    const out = this.loadStats().bgames.slice();
+    const g = this.billiards;
+    if (g && g.isOver) {
+      const pids = (g.players || this.settings.players || []);
+      out.push({
+        g: 'billiards', pids, winner: g.winner === null ? null : pids[g.winner],
+        scores: g.scores.slice(), durationMs: (g.startTime && g.endTime) ? (g.endTime - g.startTime) : 0,
+      });
+    }
     return out;
   },
 
@@ -779,7 +817,50 @@ function aggregateBreaks(records, profile) {
     buckets: bucketize(values),
     breakOffs: all.filter(r => r.breakOff).length,
     safeties: all.filter(r => r.opening).length,
+    ms: BREAK_MILESTONES.map(t => values.filter(v => v >= t).length),
   };
+}
+
+function fmtDuration(ms) {
+  if (!ms || ms <= 0) return '—';
+  const s = Math.round(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// Frames/matches/games aggregated for one profile (snooker frames or billiards games).
+function recordStatsFor(records, pid) {
+  let played = 0, won = 0, durSum = 0, durCount = 0, fastest = null, pots = 0, misses = 0;
+  records.forEach(r => {
+    const seat = (r.pids || []).indexOf(pid);
+    if (seat < 0) return;
+    played++;
+    if (r.winner === pid) won++;
+    if (r.durationMs > 0) { durSum += r.durationMs; durCount++; if (fastest === null || r.durationMs < fastest) fastest = r.durationMs; }
+    if (r.pots) pots += r.pots[seat] || 0;
+    if (r.misses) misses += r.misses[seat] || 0;
+  });
+  return {
+    played, won,
+    winPct: played ? won / played * 100 : 0,
+    avgDur: durCount ? durSum / durCount : 0,
+    fastest: fastest,
+    pots, misses,
+    potPct: (pots + misses) ? pots / (pots + misses) * 100 : 0,
+    ballsPerFrame: played ? pots / played : 0,
+  };
+}
+
+// Everything for one profile + game, for the player page and leaderboard.
+function summarize(profile, gameType) {
+  const a = aggregateBreaks(App.allRecords().filter(r => r.g === gameType), profile);
+  let frames, matches = null;
+  if (gameType === 'snooker') {
+    frames = recordStatsFor(App.allFrames(), profile.id);
+    matches = recordStatsFor(App.allMatches(), profile.id);
+  } else {
+    frames = recordStatsFor(App.allBilliardsGames(), profile.id);
+  }
+  return { breaks: a, frames, matches };
 }
 
 function timeAgo(t) {
@@ -802,17 +883,19 @@ function gameToggle() {
     </div>`;
 }
 
+function rowsHtml(rows) {
+  return rows.map(([k, v]) => `<div class="srow"><span>${k}</span><b>${v}</b></div>`).join('');
+}
+
 function statDetail(a) {
-  const rows = [
+  const rows = rowsHtml([
     ['Breaks made', a.breaks],
     ['Average break', a.avg ? a.avg.toFixed(1) : '—'],
     ['Points / visit', a.ppv ? a.ppv.toFixed(1) : '—'],
-    ['Centuries (100+)', a.c100],
-    ['Breaks 50+ / 20+', `${a.c50} / ${a.c20}`],
     ['Consistency', a.visits ? Math.round(a.consistency) + '%' : '—'],
     ['Break-offs', a.breakOffs],
     ['Visits (after opening)', a.visits],
-  ].map(([k, v]) => `<div class="srow"><span>${k}</span><b>${v}</b></div>`).join('');
+  ]);
 
   const maxB = Math.max(1, a.buckets[0], a.buckets[1], a.buckets[2], a.buckets[3], a.buckets[4]);
   const dist = a.buckets.map((c, i) => `
@@ -829,6 +912,41 @@ function statDetail(a) {
       <h4 class="dist-h">Break sizes</h4>
       <div class="dist">${dist}</div>
     </div>`;
+}
+
+function milestoneCard(a) {
+  const chips = BREAK_MILESTONES.map((t, i) =>
+    `<div class="mschip ${a.ms[i] > 0 ? 'mschip--on' : ''}"><span class="mschip__n">${a.ms[i]}</span><span class="mschip__t">${t}+</span></div>`).join('');
+  return `<div class="scard scard--wide"><h4 class="dist-h">Milestone breaks</h4><div class="msrow">${chips}</div></div>`;
+}
+
+function recordCard(game, fs, ms) {
+  let rows;
+  if (game === 'snooker') {
+    rows = [
+      ['Frames played', fs.played],
+      ['Frames won', `${fs.won} · ${fs.played ? Math.round(fs.winPct) : 0}%`],
+    ];
+    if (ms) rows.push(['Matches played', ms.played], ['Matches won', `${ms.won} · ${ms.played ? Math.round(ms.winPct) : 0}%`]);
+  } else {
+    rows = [
+      ['Games played', fs.played],
+      ['Games won', `${fs.won} · ${fs.played ? Math.round(fs.winPct) : 0}%`],
+      ['Avg game time', fmtDuration(fs.avgDur)],
+      ['Fastest game', fmtDuration(fs.fastest)],
+    ];
+  }
+  return `<div class="scard scard--wide"><h4 class="dist-h">Record</h4><div class="srows">${rowsHtml(rows)}</div></div>`;
+}
+
+function playCard(fs) {
+  const rows = rowsHtml([
+    ['Pot success', (fs.pots + fs.misses) ? Math.round(fs.potPct) + '%' : '—'],
+    ['Balls potted / frame', fs.played ? fs.ballsPerFrame.toFixed(1) : '—'],
+    ['Avg frame time', fmtDuration(fs.avgDur)],
+    ['Fastest frame', fmtDuration(fs.fastest)],
+  ]);
+  return `<div class="scard scard--wide"><h4 class="dist-h">Potting &amp; pace</h4><div class="srows">${rows}</div></div>`;
 }
 
 function breakLog(records, profile) {
@@ -882,17 +1000,19 @@ function renderPlayer() {
   document.getElementById('player-name').textContent = prof.name;
 
   const game = App.statsGame;
-  const records = App.allRecords().filter(r => r.g === game);
-  const a = aggregateBreaks(records, prof);
+  const s = summarize(prof, game);
+  const a = s.breaks, fs = s.frames, ms = s.matches;
   const label = game === 'snooker' ? 'snooker' : 'billiards';
 
-  let body;
-  if (a.breaks === 0) {
-    body = gameToggle() + `<div class="stats-empty">No ${label} breaks recorded for ${escapeHtml(prof.name)} yet.</div>`;
-  } else {
-    body = gameToggle() + statDetail(a) +
-      `<h3 class="stats-h">Recent breaks</h3><div class="log">${breakLog(records, prof)}</div>`;
+  if (a.breaks === 0 && fs.played === 0) {
+    document.getElementById('player-body').innerHTML = gameToggle() +
+      `<div class="stats-empty">No ${label} data recorded for ${escapeHtml(prof.name)} yet.</div>`;
+    return;
   }
+
+  let body = gameToggle() + statDetail(a) + milestoneCard(a) + recordCard(game, fs, ms);
+  if (game === 'snooker') body += playCard(fs);
+  body += `<h3 class="stats-h">Recent breaks</h3><div class="log">${breakLog(App.allRecords().filter(r => r.g === game), prof)}</div>`;
   document.getElementById('player-body').innerHTML = body;
 }
 
@@ -901,24 +1021,26 @@ function renderPlayer() {
 function renderLeaderboard() {
   const game = App.statsGame;
   const metric = App.leaderMetric;
-  const records = App.allRecords().filter(r => r.g === game);
-  const rows = App.profiles
-    .map(p => ({ p, a: aggregateBreaks(records, p) }))
-    .filter(x => x.a.breaks > 0)
-    .sort((x, y) => metricValue(y.a, metric) - metricValue(x.a, metric));
-
   const metricDef = LEADER_METRICS.find(m => m.key === metric) || LEADER_METRICS[0];
+
+  const rows = App.profiles
+    .map(p => ({ p, s: summarize(p, game) }))
+    .filter(x => x.s.breaks.breaks > 0 || x.s.frames.played > 0)
+    .map(x => { x.v = metricDef.val(x.s); return x; })
+    .filter(x => x.v >= 0)
+    .sort((x, y) => y.v - x.v);
+
   const metricSel = `<select class="field__input" data-metric>${LEADER_METRICS.map(m => `<option value="${m.key}" ${m.key === metric ? 'selected' : ''}>${m.label}</option>`).join('')}</select>`;
 
   let listHtml;
   if (!rows.length) {
-    listHtml = `<div class="stats-empty">No ${game} breaks recorded yet.<br>Play some frames and your players will be ranked here.</div>`;
+    listHtml = `<div class="stats-empty">No ${game} data recorded yet.<br>Play some frames and your players will be ranked here.</div>`;
   } else {
     listHtml = '<div class="lb">' + rows.map((x, i) => `
         <div class="lbrow" data-viewstats="${x.p.id}">
           <span class="lbrank ${i < 3 ? 'lbrank--' + (i + 1) : ''}">${i + 1}</span>
           <span class="lbname">${escapeHtml(x.p.name)}</span>
-          <span class="lbval">${metricDef.fmt(x.a)}</span>
+          <span class="lbval">${metricDef.fmt(x.s)}</span>
         </div>`).join('') + '</div>';
   }
 

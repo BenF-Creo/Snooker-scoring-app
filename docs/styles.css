@@ -445,9 +445,21 @@ select.field__input {
 .cleared:active { background: rgba(224, 138, 107, 0.1); }
 .primary--danger { background: linear-gradient(180deg, #e89a7e, var(--danger)) !important; color: #2a1208 !important; }
 
-.scard--wide { padding: 16px; }
+.scard--wide { padding: 16px; margin-bottom: 12px; }
 .scard--wide .scard__highnum { font-size: 52px; }
-.dist-h { margin: 14px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dist-h { margin: 0 0 9px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.scard--wide .srows + .dist-h, .scard--wide .dist + .dist-h { margin-top: 14px; }
+
+.msrow { display: flex; flex-wrap: wrap; gap: 7px; }
+.mschip {
+  flex: 1 1 auto; min-width: 52px; text-align: center;
+  background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 4px; opacity: 0.45;
+}
+.mschip--on { opacity: 1; border-color: rgba(200, 169, 106, 0.4); background: var(--accent-soft); }
+.mschip__n { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.mschip--on .mschip__n { color: var(--accent-2); }
+.mschip__t { font-size: 10px; color: var(--faint); font-weight: 700; }
 
 /* ---------- Players / profiles ---------- */
 .nowplaying { display: flex; gap: 12px; }
