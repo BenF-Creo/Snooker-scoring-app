@@ -34,18 +34,22 @@ class BilliardsGame {
     // target is a number, or null for "no limit".
     this.target = (target === null || target === undefined) ? 100 : target;
     this.scores = [0, 0];
-    this.currentPlayer = 0;
+    this.currentPlayer = null;   // chosen at break-off; null = not started
     this.currentBreak = 0;
     this.highBreaks = [0, 0];
     this.isOver = false;
     this.winner = null;
-    this.breaker = 0;   // who broke off / started
+    this.breaker = null;
     this.scored = false;
     this.visits = 0;
+    this.startTime = null;
+    this.endTime = null;
     this.cues = ['white', 'yellow'];   // cue ball colour per seat (mutually exclusive)
     this.breaks = [];   // completed visits this game: {player, value, scored, opening, breakOff, t}
     this.undoStack = [];
   }
+
+  get started() { return this.currentPlayer !== null; }
 
   // Assign a cue ball to a seat; the other seat automatically gets the other.
   // Only allowed before the game has started — once set, it stands for the
@@ -73,6 +77,7 @@ class BilliardsGame {
     seat = seat ? 1 : 0;
     this.currentPlayer = seat;
     this.breaker = seat;
+    if (this.startTime === null) this.startTime = Date.now();
   }
 
   pointsToGo(player) {
@@ -81,7 +86,7 @@ class BilliardsGame {
   }
 
   score(key) {
-    if (this.isOver) return;
+    if (this.isOver || this.currentPlayer === null) return;
     const stroke = BILLIARDS_STROKES.find(s => s.key === key);
     if (!stroke) return;
     this._pushUndo();
@@ -92,12 +97,13 @@ class BilliardsGame {
     if (this.target && this.scores[p] >= this.target) {
       this._recordVisit();
       this.isOver = true;
+      this.endTime = Date.now();
       this.winner = p;
     }
   }
 
   endTurn() {
-    if (this.isOver) return;
+    if (this.isOver || this.currentPlayer === null) return;
     this._pushUndo();
     this._recordVisit();
     this.currentBreak = 0;
@@ -105,10 +111,11 @@ class BilliardsGame {
   }
 
   finishGame() {
-    if (this.isOver) return;
+    if (this.isOver || this.currentPlayer === null) return;
     this._pushUndo();
     this._recordVisit();
     this.isOver = true;
+    this.endTime = Date.now();
     this.winner = this.scores[0] === this.scores[1]
       ? null
       : (this.scores[0] > this.scores[1] ? 0 : 1);

@@ -10,6 +10,8 @@ const SNOOKER_BALLS = [
   { key: 'black',  name: 'Black',  value: 7 },
 ];
 
+const BREAK_MILESTONES = [10, 20, 30, 50, 70, 90, 100, 120, 147];
+
 function ballByValue(v) { return SNOOKER_BALLS.find(b => b.value === v); }
 
 class SnookerGame {
@@ -18,13 +20,15 @@ class SnookerGame {
     this.reds = (reds === 10) ? 10 : 15;   // standard 15, or the shorter 10-red game
     this.framesWon = [0, 0];
     this.frameNumber = 1;
-    this.startingPlayer = 0;
-    this.breaks = [];   // completed visits this match: {player, value, scored, frame, t}
+    this.startingPlayer = 0;          // last player to break off (not pre-selected)
+    this.breaks = [];                 // completed visits this match
+    this.frameLog = [];               // completed frames this match
     this.undoStack = [];
     this.resetFrame();
   }
 
   get framesToWin() { return Math.floor(this.bestOf / 2) + 1; }
+  get casual() { return this.bestOf === 1; }   // single frame = casual, not a match
 
   get matchWinner() {
     if (this.framesWon[0] >= this.framesToWin) return 0;
@@ -37,38 +41,48 @@ class SnookerGame {
       scores: [0, 0],
       redsRemaining: this.reds,
       phase: { type: 'red' },          // 'red' | 'colour' | 'sequence'(value)
-      currentPlayer: this.startingPlayer,
+      currentPlayer: null,             // chosen at break-off; null = not started
       currentBreak: 0,
       highBreaks: [0, 0],
-      breaker: this.startingPlayer,    // who broke off this frame
-      scored: false,                   // has a pot been made yet this frame
-      visits: 0,                       // visits recorded this frame
+      breaker: null,
+      scored: false,
+      visits: 0,
+      startTime: null,                 // set when the break-off player is chosen
+      endTime: null,
+      pots: [0, 0],
+      misses: [0, 0],
+      safeties: [0, 0],
+      fouls: [0, 0],
       isOver: false,
       winner: null,
     };
   }
 
-  // Whether the frame is still at the opening break-off (nothing has happened).
+  // The frame hasn't started until a break-off player is chosen.
+  get started() { return this.frame.currentPlayer !== null; }
+
+  // Still at the opening break-off (nothing scored yet) — breaker can be re-picked.
   get frameFresh() {
     const f = this.frame;
     return !f.isOver && f.visits === 0 && f.currentBreak === 0 &&
       f.scores[0] === 0 && f.scores[1] === 0;
   }
 
-  // Set who breaks off — only allowed before the frame has started.
+  // Choose who breaks off; starts the frame timer. Re-pickable until play begins.
   setBreaker(seat) {
     if (!this.frameFresh) return;
     seat = seat ? 1 : 0;
     this.startingPlayer = seat;
-    this.frame.currentPlayer = seat;
     this.frame.breaker = seat;
+    this.frame.currentPlayer = seat;
+    if (this.frame.startTime === null) this.frame.startTime = Date.now();
   }
 
   // --- queries ---
 
   legalKeys() {
     const f = this.frame;
-    if (f.isOver) return [];
+    if (f.isOver || f.currentPlayer === null) return [];
     if (f.phase.type === 'red') return ['red'];
     if (f.phase.type === 'colour') return ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
     if (f.phase.type === 'sequence') { const b = ballByValue(f.phase.value); return b ? [b.key] : []; }
@@ -104,11 +118,12 @@ class SnookerGame {
 
   pot(key) {
     const f = this.frame;
-    if (f.isOver || !this.legalKeys().includes(key)) return;
+    if (f.isOver || f.currentPlayer === null || !this.legalKeys().includes(key)) return;
     this._pushUndo();
 
     const ball = SNOOKER_BALLS.find(b => b.key === key);
     const p = f.currentPlayer;
+    f.pots[p] += 1;
     f.scores[p] += ball.value;
     f.currentBreak += ball.value;
     f.highBreaks[p] = Math.max(f.highBreaks[p], f.currentBreak);
@@ -128,34 +143,36 @@ class SnookerGame {
     }
   }
 
-  endTurn() {
-    if (this.frame.isOver) return;
-    this._pushUndo();
-    this._recordVisit();
-    this._switchPlayer();
-  }
+  // A played safety (no pot) — ends the visit.
+  safety() { this._endVisit('safety'); }
+
+  // A missed pot — ends the visit.
+  miss() { this._endVisit('miss'); }
 
   foul(points) {
     const f = this.frame;
-    if (f.isOver) return;
+    if (f.isOver || f.currentPlayer === null) return;
     this._pushUndo();
+    f.fouls[f.currentPlayer] += 1;
     f.scored = true;                 // a foul puts points on the board: opening phase ends
-    this._recordVisit();             // the offender's visit ends here (counts as normal play)
+    this._recordVisit('foul');
     f.scores[1 - f.currentPlayer] += Math.max(4, points);
     this._switchPlayer();
   }
 
-  concede() {
+  // Concede the frame: `loser` is the seat giving it up.
+  concede(loser) {
     const f = this.frame;
     if (f.isOver) return;
+    if (loser !== 0 && loser !== 1) loser = f.currentPlayer === 0 ? 0 : 1;
     this._pushUndo();
-    this._finishFrame(1 - f.currentPlayer);
+    if (f.currentPlayer === null) f.currentPlayer = loser;   // allow conceding before break-off
+    this._finishFrame(1 - loser);
   }
 
   advanceFrame() {
     if (!this.frame.isOver || this.matchWinner !== null) return;
     this.frameNumber += 1;
-    this.startingPlayer = 1 - this.startingPlayer;
     this.resetFrame();
     this.undoStack = [];
   }
@@ -173,10 +190,21 @@ class SnookerGame {
     this.frame = o.frame;
     this.framesWon = o.framesWon;
     this.breaks = o.breaks || [];
+    this.frameLog = o.frameLog || [];
     return true;
   }
 
   // --- internals ---
+
+  _endVisit(reason) {
+    const f = this.frame;
+    if (f.isOver || f.currentPlayer === null) return;
+    this._pushUndo();
+    if (reason === 'miss') f.misses[f.currentPlayer] += 1;
+    else if (reason === 'safety') f.safeties[f.currentPlayer] += 1;
+    this._recordVisit(reason);
+    this._switchPlayer();
+  }
 
   _switchPlayer() {
     const f = this.frame;
@@ -188,15 +216,27 @@ class SnookerGame {
 
   _finishFrame(winner) {
     const f = this.frame;
-    this._recordVisit();          // the player at the table ends their final visit
+    this._recordVisit('frame');       // the player at the table ends their final visit
     f.winner = winner;
     f.isOver = true;
+    f.endTime = Date.now();
     this.framesWon[winner] += 1;
+    this.frameLog.push({
+      frame: this.frameNumber,
+      winner: winner,
+      scores: [f.scores[0], f.scores[1]],
+      durationMs: f.startTime ? (f.endTime - f.startTime) : 0,
+      breaker: f.breaker,
+      pots: [f.pots[0], f.pots[1]],
+      misses: [f.misses[0], f.misses[1]],
+      safeties: [f.safeties[0], f.safeties[1]],
+      fouls: [f.fouls[0], f.fouls[1]],
+    });
   }
 
-  _recordVisit() {
+  _recordVisit(reason) {
     const f = this.frame;
-    // "Opening" = a safety/break-off visit before the first pot of the frame.
+    // "Opening" = a safety/break-off visit before the first point of the frame.
     const opening = !f.scored && f.currentBreak === 0;
     this.breaks.push({
       player: f.currentPlayer,
@@ -204,7 +244,8 @@ class SnookerGame {
       scored: f.currentBreak > 0,
       frame: this.frameNumber,
       opening: opening,
-      breakOff: f.visits === 0,        // the frame's first visit is the break-off
+      breakOff: f.visits === 0,
+      end: reason || 'miss',
       t: Date.now(),
     });
     f.visits += 1;
@@ -212,7 +253,9 @@ class SnookerGame {
   }
 
   _pushUndo() {
-    this.undoStack.push(JSON.stringify({ frame: this.frame, framesWon: this.framesWon, breaks: this.breaks }));
+    this.undoStack.push(JSON.stringify({
+      frame: this.frame, framesWon: this.framesWon, breaks: this.breaks, frameLog: this.frameLog,
+    }));
     if (this.undoStack.length > 300) this.undoStack.shift();
   }
 }

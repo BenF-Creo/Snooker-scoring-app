@@ -43,6 +43,7 @@ const App = {
     this._fillSettingsForm();
     this._updateHomePlayers();
     this._registerServiceWorker();
+    setInterval(tickTimers, 1000);
     showScreen('home');
   },
 
@@ -106,8 +107,16 @@ const App = {
   // --- break statistics (all-time) ---
 
   loadStats() {
-    try { const s = JSON.parse(localStorage.getItem(KEYS.stats)); if (s && Array.isArray(s.log)) return s; } catch (e) { /* ignore */ }
-    return { log: [] };
+    let s = { log: [], frames: [], matches: [], bgames: [] };
+    try {
+      const loaded = JSON.parse(localStorage.getItem(KEYS.stats));
+      if (loaded && Array.isArray(loaded.log)) s = loaded;
+    } catch (e) { /* ignore */ }
+    // ensure newer arrays exist on older saves
+    s.frames = s.frames || [];
+    s.matches = s.matches || [];
+    s.bgames = s.bgames || [];
+    return s;
   },
 
   saveStats(s) { try { localStorage.setItem(KEYS.stats, JSON.stringify(s)); } catch (e) { /* ignore */ } },
@@ -117,17 +126,46 @@ const App = {
     return players ? players[seat] : null;
   },
 
-  // Move a finished game's visits into the persisted all-time log.
+  // Move a finished game's visits, frames and match result into persisted stats.
   _flushBreaks(game, type) {
-    if (!game || !game.breaks || !game.breaks.length) return;
+    if (!game) return;
+    const hasData = (game.breaks && game.breaks.length) ||
+      (game.frameLog && game.frameLog.length) || game.isOver;
+    if (!hasData) return;
     const stats = this.loadStats();
-    game.breaks.forEach(b => {
+
+    (game.breaks || []).forEach(b => {
       const pid = this._seatId(game, b.player);
       stats.log.push({ g: type, pid, p: this.profileName(pid, b.player), v: b.value, s: b.scored, fr: b.frame || null, opening: !!b.opening, breakOff: !!b.breakOff, t: b.t || Date.now() });
     });
     if (stats.log.length > 5000) stats.log = stats.log.slice(-5000);
+
+    const pids = (game.players || this.settings.players || []).slice();
+
+    if (type === 'snooker') {
+      (game.frameLog || []).forEach(fr => {
+        stats.frames.push({
+          g: 'snooker', pids, winner: pids[fr.winner],
+          scores: fr.scores, durationMs: fr.durationMs, breaker: pids[fr.breaker],
+          pots: fr.pots, misses: fr.misses, safeties: fr.safeties, fouls: fr.fouls,
+          casual: !!game.casual, t: Date.now(),
+        });
+      });
+      if (game.matchWinner !== null && !game.casual) {
+        stats.matches.push({ g: 'snooker', pids, winner: pids[game.matchWinner], framesWon: game.framesWon.slice(), t: Date.now() });
+      }
+    } else if (type === 'billiards' && game.isOver) {
+      stats.bgames.push({
+        g: 'billiards', pids,
+        winner: game.winner === null ? null : pids[game.winner],
+        scores: game.scores.slice(), durationMs: (game.startTime && game.endTime) ? (game.endTime - game.startTime) : 0,
+        t: Date.now(),
+      });
+    }
+
     this.saveStats(stats);
     game.breaks = [];
+    if (game.frameLog) game.frameLog = [];
   },
 
   // All-time records = persisted log + live (not-yet-flushed) breaks of current games.
@@ -146,8 +184,8 @@ const App = {
   },
 
   clearStats() {
-    this.saveStats({ log: [] });
-    if (this.snooker) this.snooker.breaks = [];
+    this.saveStats({ log: [], frames: [], matches: [], bgames: [] });
+    if (this.snooker) { this.snooker.breaks = []; this.snooker.frameLog = []; }
     if (this.billiards) this.billiards.breaks = [];
     this.saveGames();
   },
@@ -296,10 +334,11 @@ const App = {
         case 'rules': showScreen('rules-snooker'); break;
         case 'breaker': g.setBreaker(+t.dataset.seat); afterSnooker(); break;
         case 'pot': g.pot(t.dataset.key); afterSnooker(); break;
-        case 'endturn': g.endTurn(); afterSnooker(); break;
+        case 'safety': g.safety(); afterSnooker(); break;
+        case 'miss': g.miss(); afterSnooker(); break;
         case 'foul': openFoulModal(); break;
         case 'undo': g.undo(); afterSnooker(); break;
-        case 'concede': g.concede(); afterSnooker(); break;
+        case 'concede': openConcedeModal(); break;
         case 'restart': g.restartFrame(); afterSnooker(); break;
         case 'newmatch': App.newSnooker(); afterSnooker(); break;
       }
@@ -373,6 +412,27 @@ const App = {
 };
 
 /* ---------- shared helpers ---------- */
+
+function fmtElapsed(start, end) {
+  if (!start) return '0:00';
+  const ms = (end || Date.now()) - start;
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// A subtle frame timer. Live while the game is running (ticks via interval),
+// frozen once `end` is set.
+function timerChip(start, end) {
+  if (!start) return '';
+  const live = end ? '' : ` data-timer="${start}"`;
+  return ` · <span class="timer"${live}>${fmtElapsed(start, end)}</span>`;
+}
+
+function tickTimers() {
+  document.querySelectorAll('[data-timer]').forEach(el => {
+    el.textContent = fmtElapsed(parseInt(el.getAttribute('data-timer'), 10), null);
+  });
+}
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => (
@@ -495,7 +555,10 @@ function renderSnooker() {
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
-      <div class="tally"><span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> frames</span><span class="tally__sep">First to ${g.framesToWin}</span></div>
+      <div class="tally">
+        <span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> ${g.casual ? 'casual frame' : 'frames'}</span>
+        <span class="tally__sep">${g.casual ? 'Single frame' : 'First to ' + g.framesToWin}${timerChip(g.frame.startTime, g.frame.endTime)}</span>
+      </div>
       <div class="panels">${panels}</div>
       ${g.frameFresh ? breakoffChooser(g, name) : `
       <div class="status">
@@ -504,8 +567,9 @@ function renderSnooker() {
       </div>`}
       <div class="balls">${balls}</div>
       <div class="actions">
-        <button class="act act--primary" data-action="endturn" ${f.isOver ? 'disabled' : ''}>End Turn</button>
-        <button class="act act--warn" data-action="foul" ${f.isOver ? 'disabled' : ''}>Foul</button>
+        <button class="act act--primary" data-action="safety" ${f.isOver || !g.started ? 'disabled' : ''}>Safety</button>
+        <button class="act act--primary" data-action="miss" ${f.isOver || !g.started ? 'disabled' : ''}>Miss</button>
+        <button class="act act--warn" data-action="foul" ${f.isOver || !g.started ? 'disabled' : ''}>Foul</button>
         <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
       </div>
       <div class="links">
@@ -534,25 +598,48 @@ function openFoulModal() {
   o.querySelector('[data-cancel]').onclick = closeOverlay;
 }
 
+function openConcedeModal() {
+  const g = App.snooker;
+  if (g.frame.isOver) return;
+  openOverlay(`
+    <h3>Concede frame</h3>
+    <p class="muted">Who is conceding?</p>
+    <div class="foul-grid" style="grid-template-columns:1fr 1fr">
+      <button class="foul-btn" data-loser="0" style="font-size:16px">${escapeHtml(App.gamePlayerName(g, 0))}</button>
+      <button class="foul-btn" data-loser="1" style="font-size:16px">${escapeHtml(App.gamePlayerName(g, 1))}</button>
+    </div>
+    <button class="modal__cancel" data-cancel>Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelectorAll('[data-loser]').forEach(b => b.onclick = () => {
+    g.concede(parseInt(b.dataset.loser, 10));
+    closeOverlay();
+    afterSnooker();
+  });
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
+}
+
 function showSnookerResult() {
   const g = App.snooker;
   const f = g.frame;
   const w = f.winner === null ? f.currentPlayer : f.winner;
   const matchOver = g.matchWinner !== null;
+  const isMatch = matchOver && !g.casual;     // best-of-1 is a casual frame, not a match
   openOverlay(`
-    <div class="result__badge">${matchOver ? ICONS.trophy : ICONS.check}</div>
-    <h3>${matchOver ? 'Match Won' : 'Frame Won'}</h3>
+    <div class="result__badge">${isMatch ? ICONS.trophy : ICONS.check}</div>
+    <h3>${isMatch ? 'Match Won' : 'Frame Won'}</h3>
     <div class="result__name">${escapeHtml(App.gamePlayerName(g, w))}</div>
     <div class="result__score">${f.scores[0]} – ${f.scores[1]}</div>
-    <p class="muted">Frames ${g.framesWon[0]} – ${g.framesWon[1]}</p>
+    ${g.casual ? '' : `<p class="muted">Frames ${g.framesWon[0]} – ${g.framesWon[1]}</p>`}
     ${matchOver
-      ? `<button class="primary" data-newmatch>New Match</button>`
-      : `<button class="primary" data-next>Next Frame</button>`}`);
+      ? `<button class="primary" data-newmatch>${g.casual ? 'Play Again' : 'New Match'}</button>`
+      : `<button class="primary" data-next>Next Frame</button>`}
+    <button class="modal__cancel" data-menu style="margin-top:10px">Main menu</button>`);
   const o = document.getElementById('overlay');
   const next = o.querySelector('[data-next]');
   if (next) next.onclick = () => { g.advanceFrame(); closeOverlay(); afterSnooker(); };
   const nm = o.querySelector('[data-newmatch]');
   if (nm) nm.onclick = () => { App.newSnooker(); closeOverlay(); afterSnooker(); };
+  o.querySelector('[data-menu]').onclick = () => { closeOverlay(); showScreen('home'); };
 }
 
 /* ---------- billiards rendering ---------- */
@@ -585,8 +672,9 @@ function renderBilliards() {
   }).join('');
 
   // Stroke buttons drawn from the current striker's point of view.
-  const cue = cues[g.currentPlayer];
-  const opp = cues[1 - g.currentPlayer];
+  const seat = g.currentPlayer === null ? (g.breaker == null ? 0 : g.breaker) : g.currentPlayer;
+  const cue = cues[seat];
+  const opp = cues[1 - seat];
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const renderStroke = s => {
     const label = s.object === 'opp' ? `${s.base} ${cap(opp)}` : s.base;
@@ -597,7 +685,7 @@ function renderBilliards() {
       return `<span class="bball bball--${color}">${badge}</span>`;
     }).join('');
     return `
-      <button class="stroke" data-action="score" data-key="${s.key}" ${g.isOver ? 'disabled' : ''}>
+      <button class="stroke" data-action="score" data-key="${s.key}" ${g.isOver || !g.started ? 'disabled' : ''}>
         <span class="stroke__balls">${scene}</span>
         <span class="stroke__label">${escapeHtml(label)}</span>
         <span class="stroke__val">+${s.value}</span>
@@ -616,13 +704,13 @@ function renderBilliards() {
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
-      <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}</span></div>
+      <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}${timerChip(g.startTime, g.endTime)}</span></div>
       <div class="panels">${panels}</div>
       ${g.frameFresh ? breakoffChooser(g, name) + cueChooser(g) : ''}
       <div class="strokes">${strokes}</div>
       <div class="actions">
-        <button class="act act--primary" data-action="endturn" ${g.isOver ? 'disabled' : ''}>End Break</button>
-        ${g.target ? '' : `<button class="act" data-action="finish" ${g.isOver ? 'disabled' : ''}>Finish</button>`}
+        <button class="act act--primary" data-action="endturn" ${g.isOver || !g.started ? 'disabled' : ''}>End Break</button>
+        ${g.target ? '' : `<button class="act" data-action="finish" ${g.isOver || !g.started ? 'disabled' : ''}>Finish</button>`}
         <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
       </div>
       <div class="links">
@@ -641,12 +729,11 @@ function showBilliardsResult() {
     <h3>${w === null ? 'Game Drawn' : 'Game Won'}</h3>
     ${w === null ? '' : `<div class="result__name">${escapeHtml(App.gamePlayerName(g, w))}</div>`}
     <div class="result__score">${g.scores[0]} – ${g.scores[1]}</div>
-    <button class="primary" data-newgame>New Game</button>`);
-  document.getElementById('overlay').querySelector('[data-newgame]').onclick = () => {
-    App.newBilliards();
-    closeOverlay();
-    afterBilliards();
-  };
+    <button class="primary" data-newgame>New Game</button>
+    <button class="modal__cancel" data-menu style="margin-top:10px">Main menu</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-newgame]').onclick = () => { App.newBilliards(); closeOverlay(); afterBilliards(); };
+  o.querySelector('[data-menu]').onclick = () => { closeOverlay(); showScreen('home'); };
 }
 
 /* ---------- statistics rendering ---------- */
