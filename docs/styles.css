@@ -379,6 +379,44 @@ select.field__input {
 .chip--pink { background: var(--ball-pink); }
 .chip--black { background: var(--ball-black); border: 1px solid var(--line); }
 
+/* ---------- Drills ---------- */
+.card--drill {
+  appearance: none; text-align: left; width: 100%; cursor: pointer;
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 12px;
+}
+.card--drill .card__title { font-size: 18px; }
+.card--drill .card__sub { margin-top: 4px; }
+.card__go { color: var(--accent-2); font-size: 26px; font-weight: 700; flex: none; }
+
+.seg--wrap { flex-wrap: wrap; }
+.seg--wrap .seg__btn { flex: 1 1 56px; min-width: 56px; }
+
+.cset { display: flex; flex-wrap: wrap; gap: 8px; }
+.cbtn {
+  appearance: none; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  border-radius: 999px; padding: 8px 13px 8px 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.cbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+
+.drillbtns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.drillbtns .drillbtn:only-child, .drillbtns .drillbtn:nth-child(3):last-child { grid-column: 1 / -1; }
+.drillbtn {
+  appearance: none; border: 1px solid var(--line-strong); border-radius: 16px;
+  padding: 20px 12px; cursor: pointer; min-height: 88px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: var(--surface); color: var(--text);
+}
+.drillbtn:active { transform: scale(0.98); }
+.drillbtn__label { font-size: 17px; font-weight: 700; }
+.drillbtn__val { font-size: 14px; font-weight: 800; color: var(--accent-2); }
+.drillbtn__sub { font-size: 11px; color: var(--faint); }
+.drillbtn--red { background: rgba(189, 59, 47, 0.22); border-color: transparent; }
+.drillbtn--score { background: var(--accent-soft); border-color: transparent; }
+.drillbtn--score .drillbtn__val { color: var(--accent-2); }
+.drillbtn--cannon { background: rgba(231, 187, 51, 0.20); border-color: transparent; color: #f0d98a; }
+.drillbtn--miss { background: rgba(255, 255, 255, 0.06); }
+
 /* ---------- Statistics ---------- */
 .seg {
   display: flex; gap: 4px; padding: 4px;

@@ -32,6 +32,9 @@ const App = {
   statsGame: 'snooker',
   viewProfileId: null,
   leaderMetric: 'high',
+  drill: null,          // active DrillSession
+  drillGame: 'snooker', // drills list filter
+  setupDrillId: null,
 
   init() {
     this._loadSettings();
@@ -107,7 +110,7 @@ const App = {
   // --- break statistics (all-time) ---
 
   loadStats() {
-    let s = { log: [], frames: [], matches: [], bgames: [] };
+    let s = { log: [], frames: [], matches: [], bgames: [], drills: [] };
     try {
       const loaded = JSON.parse(localStorage.getItem(KEYS.stats));
       if (loaded && Array.isArray(loaded.log)) s = loaded;
@@ -116,8 +119,32 @@ const App = {
     s.frames = s.frames || [];
     s.matches = s.matches || [];
     s.bgames = s.bgames || [];
+    s.drills = s.drills || [];
     return s;
   },
+
+  // --- drills ---
+
+  startDrill(drillId, opts) {
+    const d = drillById(drillId);
+    if (!d) return;
+    this.drill = new DrillSession(d, opts);
+    showScreen('drill');
+  },
+
+  finishDrill() {
+    if (!this.drill) return;
+    const results = this.drill.results();
+    if (results.length) {
+      const stats = this.loadStats();
+      results.forEach(r => stats.drills.push(r));
+      if (stats.drills.length > 5000) stats.drills = stats.drills.slice(-5000);
+      this.saveStats(stats);
+    }
+    this.drill = null;
+  },
+
+  allDrillRecords() { return this.loadStats().drills; },
 
   saveStats(s) { try { localStorage.setItem(KEYS.stats, JSON.stringify(s)); } catch (e) { /* ignore */ } },
 
@@ -222,7 +249,7 @@ const App = {
   },
 
   clearStats() {
-    this.saveStats({ log: [], frames: [], matches: [], bgames: [] });
+    this.saveStats({ log: [], frames: [], matches: [], bgames: [], drills: [] });
     if (this.snooker) { this.snooker.breaks = []; this.snooker.frameLog = []; }
     if (this.billiards) this.billiards.breaks = [];
     this.saveGames();
@@ -473,6 +500,43 @@ const App = {
       const m = e.target.closest('[data-metric]');
       if (m) { this.leaderMetric = m.value; renderLeaderboard(); }
     });
+
+    // Drills list
+    document.getElementById('screen-drills').addEventListener('click', e => {
+      const t = e.target.closest('[data-action]');
+      if (!t) return;
+      if (t.dataset.action === 'drill-game') { this.drillGame = t.dataset.game; renderDrills(); }
+      else if (t.dataset.action === 'pick-drill') { this.setupDrillId = t.dataset.drill; showScreen('drill-setup'); }
+    });
+
+    // Drill setup
+    const setup = document.getElementById('screen-drill-setup');
+    setup.addEventListener('click', e => {
+      const t = e.target.closest('[data-action]');
+      if (!t) return;
+      if (t.dataset.action === 'start-drill') startDrillFromSetup();
+      else if (t.dataset.action === 'setup-mode' || t.dataset.action === 'setup-reds' || t.dataset.action === 'setup-colour') {
+        handleSetupToggle(t.dataset);
+      }
+    });
+    setup.addEventListener('change', e => {
+      const sel = e.target.closest('[data-setupsel]');
+      if (sel) { DRILL_SETUP[sel.dataset.setupsel] = sel.value; renderDrillSetup(); }
+    });
+
+    // Drill play
+    document.getElementById('screen-drill').addEventListener('click', e => {
+      const t = e.target.closest('[data-action]');
+      if (!t || t.disabled) return;
+      const g = this.drill;
+      switch (t.dataset.action) {
+        case 'drill-exit': this.finishDrill(); showScreen('drills'); break;
+        case 'drill-press': g.press(t.dataset.key); afterDrill(); break;
+        case 'drill-miss': g.miss(); afterDrill(); break;
+        case 'drill-undo': g.undo(); afterDrill(); break;
+        case 'drill-finish': openDrillSummary(); break;
+      }
+    });
   },
 
   _registerServiceWorker() {
@@ -521,6 +585,9 @@ function showScreen(id) {
   if (id === 'players') renderPlayers();
   if (id === 'player') renderPlayer();
   if (id === 'leaderboard') renderLeaderboard();
+  if (id === 'drills') renderDrills();
+  if (id === 'drill-setup') renderDrillSetup();
+  if (id === 'drill') renderDrillPlay();
   window.scrollTo(0, 0);
 }
 
@@ -1036,15 +1103,20 @@ function renderPlayer() {
   const s = summarize(prof, game);
   const a = s.breaks, fs = s.frames, ms = s.matches;
   const label = game === 'snooker' ? 'snooker' : 'billiards';
+  const drills = drillCard(prof.id, game);
 
-  if (a.breaks === 0 && fs.played === 0) {
+  if (a.breaks === 0 && fs.played === 0 && !drills) {
     document.getElementById('player-body').innerHTML = gameToggle() +
       `<div class="stats-empty">No ${label} data recorded for ${escapeHtml(prof.name)} yet.</div>`;
     return;
   }
 
-  let body = gameToggle() + statDetail(a) + milestoneCard(a) + recordCard(game, fs, ms);
-  if (game === 'snooker') body += playCard(fs);
+  let body = gameToggle();
+  if (a.breaks > 0 || fs.played > 0) {
+    body += statDetail(a) + milestoneCard(a) + recordCard(game, fs, ms);
+    if (game === 'snooker') body += playCard(fs);
+  }
+  body += drills;
   body += `<h3 class="stats-h">Recent breaks</h3><div class="log">${breakLog(App.allRecords().filter(r => r.g === game), prof)}</div>`;
   document.getElementById('player-body').innerHTML = body;
 }
@@ -1105,6 +1177,223 @@ function confirmClearStats() {
   const o = document.getElementById('overlay');
   o.querySelector('[data-clear]').onclick = () => { App.clearStats(); closeOverlay(); renderLeaderboard(); };
   o.querySelector('[data-cancel]').onclick = closeOverlay;
+}
+
+/* ---------- drills ---------- */
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+let DRILL_SETUP = { drillId: null };
+
+function initDrillSetup(drill) {
+  const players = App.settings.players || [];
+  DRILL_SETUP = {
+    drillId: drill.id,
+    mode: 'solo',
+    p0: players[0], p1: players[1],
+    reds: (drill.setup && drill.setup.reds) ? drill.setup.reds.def : null,
+    colours: (drill.setup && drill.setup.colours) ? drill.setup.colours.def.slice() : null,
+  };
+}
+
+function renderDrills() {
+  const game = App.drillGame;
+  const list = DRILLS.filter(d => d.game === game).map(d => `
+      <button class="card card--drill" data-action="pick-drill" data-drill="${d.id}">
+        <div><h2 class="card__title">${escapeHtml(d.name)}</h2><p class="card__sub">${escapeHtml(d.blurb)}</p></div>
+        <span class="card__go">›</span>
+      </button>`).join('');
+  document.getElementById('screen-drills').innerHTML = `
+    <header class="appbar">
+      <button class="appbar__btn appbar__btn--icon" data-nav="home">${ICONS.back}<span>Menu</span></button>
+      <div class="appbar__title">Practice Drills</div>
+      <span class="appbar__btn appbar__btn--ghost"></span>
+    </header>
+    <div class="screen__body">
+      <div class="seg">
+        <button class="seg__btn ${game === 'snooker' ? 'seg__btn--active' : ''}" data-action="drill-game" data-game="snooker">Snooker</button>
+        <button class="seg__btn ${game === 'billiards' ? 'seg__btn--active' : ''}" data-action="drill-game" data-game="billiards">Billiards</button>
+      </div>
+      ${list}
+    </div>`;
+}
+
+function handleSetupToggle(d) {
+  if (d.action === 'setup-mode') DRILL_SETUP.mode = d.mode;
+  else if (d.action === 'setup-reds') DRILL_SETUP.reds = parseInt(d.reds, 10);
+  else if (d.action === 'setup-colour') {
+    const arr = DRILL_SETUP.colours, i = arr.indexOf(d.colour);
+    if (i >= 0) { if (arr.length > 1) arr.splice(i, 1); } else arr.push(d.colour);
+  }
+  renderDrillSetup();
+}
+
+function renderDrillSetup() {
+  const drill = drillById(App.setupDrillId);
+  if (!drill) { showScreen('drills'); return; }
+  if (DRILL_SETUP.drillId !== drill.id) initDrillSetup(drill);
+  const s = DRILL_SETUP;
+  const profOpts = sel => App.profiles.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+
+  let html = `
+    <header class="appbar">
+      <button class="appbar__btn appbar__btn--icon" data-nav="drills">${ICONS.back}<span>Drills</span></button>
+      <div class="appbar__title">${escapeHtml(drill.name)}</div>
+      <span class="appbar__btn appbar__btn--ghost"></span>
+    </header>
+    <div class="screen__body">
+      <p class="home__intro">${escapeHtml(drill.blurb)}</p>
+      <h3 class="stats-h">Players</h3>
+      <div class="seg">
+        <button class="seg__btn ${s.mode === 'solo' ? 'seg__btn--active' : ''}" data-action="setup-mode" data-mode="solo">Solo</button>
+        <button class="seg__btn ${s.mode === '2p' ? 'seg__btn--active' : ''}" data-action="setup-mode" data-mode="2p">2 players</button>
+      </div>
+      <div class="nowplaying">
+        <label class="field"><span class="field__label">${s.mode === '2p' ? 'Player 1' : 'Player'}</span><select class="field__input" data-setupsel="p0">${profOpts(s.p0)}</select></label>
+        ${s.mode === '2p' ? `<label class="field"><span class="field__label">Player 2</span><select class="field__input" data-setupsel="p1">${profOpts(s.p1)}</select></label>` : ''}
+      </div>`;
+
+  if (drill.setup && drill.setup.reds) {
+    html += `<h3 class="stats-h">${drill.setup.reds.label}</h3><div class="seg seg--wrap">` +
+      drill.setup.reds.options.map(n => `<button class="seg__btn ${s.reds === n ? 'seg__btn--active' : ''}" data-action="setup-reds" data-reds="${n}">${n}</button>`).join('') + `</div>`;
+  }
+  if (drill.setup && drill.setup.colours) {
+    html += `<h3 class="stats-h">${drill.setup.colours.label}</h3><div class="cset">` +
+      ['yellow', 'green', 'brown', 'blue', 'pink', 'black'].map(c => `<button class="cbtn ${s.colours.includes(c) ? 'cbtn--on' : ''}" data-action="setup-colour" data-colour="${c}"><span class="chip chip--${c}"></span>${cap(c)}</button>`).join('') + `</div>`;
+  } else if (drill.setup && drill.setup.coloursFixed) {
+    html += `<h3 class="stats-h">Colours</h3><p class="form__note">This drill uses the ${drill.setup.coloursFixed.map(cap).join(' &amp; ')}.</p>`;
+  }
+  html += `<button class="btn btn--primary btn--block" data-action="start-drill">Start drill</button></div>`;
+  document.getElementById('screen-drill-setup').innerHTML = html;
+}
+
+function startDrillFromSetup() {
+  const drill = drillById(App.setupDrillId);
+  const s = DRILL_SETUP;
+  const players = s.mode === '2p' ? [s.p0, s.p1] : [s.p0];
+  const opts = { players };
+  if (drill.setup && drill.setup.reds) opts.reds = s.reds;
+  if (drill.setup && drill.setup.colours) opts.colours = s.colours.slice();
+  App.startDrill(drill.id, opts);
+}
+
+function afterDrill() { renderDrillPlay(); }
+
+function renderDrillPlay() {
+  const g = App.drill;
+  if (!g) { showScreen('drills'); return; }
+  const d = g.drill;
+  const pname = i => escapeHtml(App.profileName(g.players[i], i));
+
+  const panels = g.players.map((pid, i) => {
+    const active = g.solo || g.cp === i;
+    let big, sub;
+    if (d.mode === 'attempts') {
+      big = g.attempts[i] ? Math.round(g.made[i] / g.attempts[i] * 100) + '%' : '0%';
+      sub = `${g.made[i]}/${g.attempts[i]} · best ${g.bestStreak[i]}`;
+    } else {
+      big = active ? g.currentBreak : 0;
+      sub = `High ${g.highBreaks[i]}`;
+    }
+    return `<div class="panel ${active && !g.solo ? 'panel--active' : ''}">
+        <div class="panel__name">${pname(i)}</div>
+        <div class="panel__score">${big}</div>
+        <div class="panel__turn">${sub}</div>
+      </div>`;
+  }).join('');
+
+  let status = '';
+  if (d.mode === 'lineup' || d.mode === 'clearance') {
+    const lk = g.legalKeys();
+    const nb = lk.length === 1 ? SNOOKER_BALLS.find(x => x.key === lk[0]) : null;
+    const txt = d.mode === 'clearance' ? (nb ? 'Pot ' + nb.name.toLowerCase() : '')
+      : (g.phase.type === 'red' ? 'Pot a red' : g.phase.type === 'colour' ? 'Pot a colour' : (nb ? 'Pot ' + nb.name.toLowerCase() : ''));
+    status = `<div class="status"><div class="status__next"><span class="status__label">Next</span><span class="status__text">${txt}</span></div><div class="status__remain">Break <b>${g.currentBreak}</b></div></div>`;
+  } else if (d.consecutive) {
+    status = `<div class="status"><div class="status__next"><span class="status__label">In a row</span><span class="status__text">${g.consecutive}</span></div><div class="status__remain">Break <b>${g.currentBreak}</b></div></div>`;
+  }
+
+  let controls;
+  if (d.mode === 'lineup' || d.mode === 'clearance') {
+    const legal = g.legalKeys();
+    const set = d.mode === 'clearance' ? ['yellow', 'green', 'brown', 'blue', 'pink', 'black'] : ['red'].concat(g.colours || []);
+    const balls = set.map(k => {
+      const b = SNOOKER_BALLS.find(x => x.key === k);
+      const isLegal = legal.includes(k);
+      return `<button class="ball ball--${k} ${isLegal ? '' : 'is-disabled'}" data-action="drill-press" data-key="${k}" ${isLegal ? '' : 'disabled'}><span class="ball__val">${b.value}</span></button>`;
+    }).join('');
+    controls = `<div class="balls">${balls}</div>
+      <div class="actions">
+        <button class="act act--primary" data-action="drill-miss">Miss</button>
+        <button class="act" data-action="drill-undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+      </div>`;
+  } else {
+    const btns = d.buttons.map(b => `
+        <button class="drillbtn drillbtn--${b.tone}" data-action="drill-press" data-key="${b.key}">
+          <span class="drillbtn__label">${b.label}</span>
+          ${b.value ? `<span class="drillbtn__val">+${b.value}</span>` : ''}
+          ${b.sub ? `<span class="drillbtn__sub">${b.sub}</span>` : ''}
+        </button>`).join('');
+    controls = `<div class="drillbtns">${btns}</div>
+      <div class="actions"><button class="act" data-action="drill-undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button></div>`;
+  }
+
+  document.getElementById('screen-drill').innerHTML = `
+    <header class="appbar">
+      <button class="appbar__btn appbar__btn--icon" data-action="drill-exit">${ICONS.back}<span>Drills</span></button>
+      <div class="appbar__title">${escapeHtml(d.name)}</div>
+      <button class="appbar__btn" data-action="drill-finish">Finish</button>
+    </header>
+    <div class="screen__body">
+      <div class="panels">${panels}</div>
+      ${status}
+      ${controls}
+    </div>`;
+}
+
+function openDrillSummary() {
+  const g = App.drill, d = g.drill;
+  const lines = g.players.map((pid, i) => {
+    const nm = escapeHtml(App.profileName(pid, i));
+    if (d.mode === 'attempts') {
+      const pct = g.attempts[i] ? Math.round(g.made[i] / g.attempts[i] * 100) : 0;
+      return `${nm}: ${pct}% (${g.made[i]}/${g.attempts[i]}), best streak ${g.bestStreak[i]}`;
+    }
+    return `${nm}: high break ${g.highBreaks[i]}`;
+  }).join('<br>');
+  openOverlay(`
+    <div class="result__badge">${ICONS.trophy}</div>
+    <h3>Drill summary</h3>
+    <p class="muted">${lines}</p>
+    <button class="primary" data-save>Save &amp; exit</button>
+    <button class="modal__cancel" data-keep style="margin-top:10px">Keep practising</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-save]').onclick = () => { App.finishDrill(); closeOverlay(); showScreen('drills'); };
+  o.querySelector('[data-keep]').onclick = closeOverlay;
+}
+
+// Per-profile drill bests for the player stats page.
+function drillSummaryFor(pid, game) {
+  const recs = App.allDrillRecords().filter(r => r.g === game && r.pid === pid);
+  const byDrill = {};
+  recs.forEach(r => { (byDrill[r.drill] = byDrill[r.drill] || []).push(r); });
+  return DRILLS.filter(d => d.game === game).map(d => {
+    const rs = byDrill[d.id] || [];
+    if (!rs.length) return null;
+    if (d.mode === 'attempts') {
+      let made = 0, att = 0, streak = 0;
+      rs.forEach(r => { made += r.made || 0; att += r.attempts || 0; streak = Math.max(streak, r.bestStreak || 0); });
+      return [d.name, `${att ? Math.round(made / att * 100) : 0}% · streak ${streak}`];
+    }
+    const high = Math.max(0, ...rs.filter(r => r.kind === 'break').map(r => r.v || 0));
+    return [d.name, `High ${high}`];
+  }).filter(Boolean);
+}
+
+function drillCard(pid, game) {
+  const items = drillSummaryFor(pid, game);
+  if (!items.length) return '';
+  return `<div class="scard scard--wide"><h4 class="dist-h">Drill bests</h4><div class="srows">${rowsHtml(items)}</div></div>`;
 }
 
 /* ---------- boot ---------- */
