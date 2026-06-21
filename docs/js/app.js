@@ -280,12 +280,45 @@ const App = {
   _loadGames() {
     try {
       const a = JSON.parse(localStorage.getItem(KEYS.snooker));
-      if (a && a.frame) { const g = new SnookerGame(a.bestOf); Object.assign(g, a); this.snooker = g; }
+      if (a && a.frame) { const g = new SnookerGame(a.bestOf, a.reds); Object.assign(g, a); this._migrateSnooker(g); this.snooker = g; }
     } catch (e) { /* ignore */ }
     try {
       const b = JSON.parse(localStorage.getItem(KEYS.billiards));
-      if (b && Array.isArray(b.scores)) { const g = new BilliardsGame(b.target); Object.assign(g, b); this.billiards = g; }
+      if (b && Array.isArray(b.scores)) { const g = new BilliardsGame(b.target); Object.assign(g, b); this._migrateBilliards(g); this.billiards = g; }
     } catch (e) { /* ignore */ }
+  },
+
+  // Backfill fields added after a save was made, and convert an old in-progress
+  // frame (which had a pre-selected break-off player) to the new "pick first" model.
+  _migrateSnooker(g) {
+    if (!Array.isArray(g.frameLog)) g.frameLog = [];
+    if (!Array.isArray(g.breaks)) g.breaks = [];
+    const f = g.frame;
+    if (f.pots === undefined) f.pots = [0, 0];
+    if (f.misses === undefined) f.misses = [0, 0];
+    if (f.safeties === undefined) f.safeties = [0, 0];
+    if (f.fouls === undefined) f.fouls = [0, 0];
+    if (f.endTime === undefined) f.endTime = null;
+    if (f.startTime === undefined) {
+      f.startTime = null;
+      // old fresh frame: require a break-off pick instead of pre-selecting
+      if (!f.isOver && f.visits === 0 && f.currentBreak === 0 && f.scores[0] === 0 && f.scores[1] === 0) {
+        f.currentPlayer = null;
+        f.breaker = null;
+      }
+    }
+  },
+
+  _migrateBilliards(g) {
+    if (!Array.isArray(g.breaks)) g.breaks = [];
+    if (g.endTime === undefined) g.endTime = null;
+    if (g.startTime === undefined) {
+      g.startTime = null;
+      if (!g.isOver && g.visits === 0 && g.currentBreak === 0 && g.scores[0] === 0 && g.scores[1] === 0) {
+        g.currentPlayer = null;
+        g.breaker = null;
+      }
+    }
   },
 
   // --- settings form ---
