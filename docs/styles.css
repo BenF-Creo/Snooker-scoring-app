@@ -314,6 +314,26 @@ body {
 .cueswap__p { display: inline-flex; align-items: center; gap: 6px; }
 .cueswap__icon { color: var(--muted); font-size: 15px; }
 
+/* ---------- Billiards scoring list ---------- */
+.strokelist { display: flex; flex-direction: column; gap: 8px; }
+.strokelist__sep {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--faint); padding: 8px 2px 2px; text-align: center;
+}
+.strokerow {
+  appearance: none; width: 100%; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; min-height: 58px;
+  border: 1px solid var(--line); border-radius: 14px; padding: 11px 14px; color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+}
+.strokerow:active { transform: scale(0.99); }
+.strokerow:disabled { opacity: 0.4; }
+.strokerow__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.strokerow__label { font-size: 16px; font-weight: 700; }
+.strokerow__sub { font-size: 12px; color: var(--faint); }
+.strokerow__balls { display: flex; gap: 6px; align-items: center; flex: none; }
+.strokerow__val { font-size: 18px; font-weight: 800; color: var(--accent-2); flex: none; min-width: 36px; text-align: right; }
+
 /* ---------- Action row ---------- */
 .actions { display: flex; gap: 10px; }
 .act {

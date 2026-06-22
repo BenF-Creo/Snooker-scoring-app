@@ -110,6 +110,23 @@ class BilliardsGame {
     this.currentPlayer = 1 - this.currentPlayer;
   }
 
+  // A foul always gives 2 points to the opponent and passes the turn.
+  foul() {
+    if (this.isOver || this.currentPlayer === null) return;
+    this._pushUndo();
+    this.scored = true;
+    this._recordVisit();
+    const opp = 1 - this.currentPlayer;
+    this.scores[opp] += 2;
+    this.currentBreak = 0;
+    this.currentPlayer = opp;
+    if (this.target && this.scores[opp] >= this.target) {
+      this.isOver = true;
+      this.endTime = Date.now();
+      this.winner = opp;
+    }
+  }
+
   finishGame() {
     if (this.isOver || this.currentPlayer === null) return;
     this._pushUndo();

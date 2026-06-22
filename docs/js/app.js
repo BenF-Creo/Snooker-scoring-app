@@ -57,6 +57,10 @@ const App = {
   profileById(id) { return this.profiles.find(p => p.id === id) || null; },
 
   profileName(id, fallbackIndex) {
+    if (typeof id === 'string' && id.slice(-3) === '::2') {
+      const base = this.profileById(id.slice(0, -3));
+      return base ? base.name + ' (2)' : 'Player (2)';
+    }
     const p = this.profileById(id);
     if (p) return p.name;
     return (fallbackIndex != null) ? ('Player ' + (fallbackIndex + 1)) : 'Player';
@@ -93,17 +97,25 @@ const App = {
     this._saveSettings();
   },
 
-  newSnooker() {
+  // soloPid: a profile id for a solo game (you play both sides; seat 1 is
+  // "<you> (2)"). undefined = inherit the current game's mode; null = normal.
+  newSnooker(soloPid) {
+    if (soloPid === undefined) soloPid = (this.snooker && this.snooker.solo) ? this.snooker.soloPid : null;
     this._flushBreaks(this.snooker, 'snooker');
     this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds);
-    this.snooker.players = this.settings.players.slice();
+    this.snooker.solo = !!soloPid;
+    this.snooker.soloPid = soloPid || null;
+    this.snooker.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice();
     this.saveGames();
   },
 
-  newBilliards() {
+  newBilliards(soloPid) {
+    if (soloPid === undefined) soloPid = (this.billiards && this.billiards.solo) ? this.billiards.soloPid : null;
     this._flushBreaks(this.billiards, 'billiards');
     this.billiards = new BilliardsGame(this.settings.billiardsTarget);
-    this.billiards.players = this.settings.players.slice();
+    this.billiards.solo = !!soloPid;
+    this.billiards.soloPid = soloPid || null;
+    this.billiards.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice();
     this.saveGames();
   },
 
@@ -409,8 +421,8 @@ const App = {
       const t = e.target.closest('[data-nav]');
       if (!t) return;
       const dst = t.dataset.nav;
-      if (dst === 'snooker' && !this.snooker) this.newSnooker();
-      if (dst === 'billiards' && !this.billiards) this.newBilliards();
+      if (dst === 'snooker' && (!this.snooker || this.snooker.frame.isOver)) this.newSnooker(null);
+      if (dst === 'billiards' && (!this.billiards || this.billiards.isOver)) this.newBilliards(null);
       showScreen(dst);
     });
   },
@@ -452,7 +464,8 @@ const App = {
         case 'breaker': g.setBreaker(+t.dataset.seat); afterBilliards(); break;
         case 'swapcue': g.swapCues(); afterBilliards(); break;
         case 'score': g.score(t.dataset.key); afterBilliards(); break;
-        case 'endturn': g.endTurn(); afterBilliards(); break;
+        case 'miss': g.endTurn(); afterBilliards(); break;
+        case 'foul': g.foul(); afterBilliards(); break;
         case 'undo': g.undo(); afterBilliards(); break;
         case 'finish': g.finishGame(); afterBilliards(); break;
         case 'newgame': App.newBilliards(); afterBilliards(); break;
@@ -507,6 +520,7 @@ const App = {
       if (!t) return;
       if (t.dataset.action === 'drill-game') { this.drillGame = t.dataset.game; renderDrills(); }
       else if (t.dataset.action === 'pick-drill') { this.setupDrillId = t.dataset.drill; showScreen('drill-setup'); }
+      else if (t.dataset.action === 'solo-game') { openSoloPicker(); }
     });
 
     // Drill setup
@@ -547,6 +561,9 @@ const App = {
 };
 
 /* ---------- shared helpers ---------- */
+
+// Derived id for the "second side" of a solo game (you playing both sides).
+function soloSideId(pid) { return pid + '::2'; }
 
 function fmtElapsed(start, end) {
   if (!start) return '0:00';
@@ -689,7 +706,7 @@ function renderSnooker() {
   document.getElementById('screen-snooker').innerHTML = `
     <header class="appbar">
       <button class="appbar__btn appbar__btn--icon" data-action="home">${ICONS.back}<span>Menu</span></button>
-      <div class="appbar__title">Frame ${g.frameNumber} · Best of ${g.bestOf}</div>
+      <div class="appbar__title">${g.solo ? 'Solo · ' : ''}Frame ${g.frameNumber} · Best of ${g.bestOf}</div>
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
@@ -823,34 +840,38 @@ function renderBilliards() {
       return `<span class="bball bball--${color}">${badge}</span>`;
     }).join('');
     return `
-      <button class="stroke" data-action="score" data-key="${s.key}" ${g.isOver || !g.started ? 'disabled' : ''}>
-        <span class="stroke__balls">${scene}</span>
-        <span class="stroke__label">${escapeHtml(label)}</span>
-        <span class="stroke__val">+${s.value}</span>
-        <span class="stroke__sub">${s.sub}</span>
+      <button class="strokerow" data-action="score" data-key="${s.key}" ${g.isOver || !g.started ? 'disabled' : ''}>
+        <span class="strokerow__main">
+          <span class="strokerow__label">${escapeHtml(label)}</span>
+          <span class="strokerow__sub">${s.sub}</span>
+        </span>
+        <span class="strokerow__balls">${scene}</span>
+        <span class="strokerow__val">+${s.value}</span>
       </button>`;
   };
   const strokes =
     BILLIARDS_STROKES.filter(s => s.group !== 'combo').map(renderStroke).join('') +
-    '<div class="strokes__sep">Combinations · one stroke, one tap</div>' +
+    '<div class="strokelist__sep">Combinations · one stroke, one tap</div>' +
     BILLIARDS_STROKES.filter(s => s.group === 'combo').map(renderStroke).join('');
 
+  const lock = g.isOver || !g.started;
   document.getElementById('screen-billiards').innerHTML = `
     <header class="appbar">
       <button class="appbar__btn appbar__btn--icon" data-action="home">${ICONS.back}<span>Menu</span></button>
-      <div class="appbar__title">English Billiards</div>
+      <div class="appbar__title">${g.solo ? 'Solo · ' : ''}English Billiards</div>
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
       <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}${timerChip(g.startTime, g.endTime)}</span></div>
       <div class="panels">${panels}</div>
       ${g.frameFresh ? breakoffChooser(g, name) + cueChooser(g) : ''}
-      <div class="strokes">${strokes}</div>
       <div class="actions">
-        <button class="act act--primary" data-action="endturn" ${g.isOver || !g.started ? 'disabled' : ''}>End Break</button>
-        ${g.target ? '' : `<button class="act" data-action="finish" ${g.isOver || !g.started ? 'disabled' : ''}>Finish</button>`}
+        <button class="act act--warn" data-action="foul" ${lock ? 'disabled' : ''}>Foul +2</button>
+        <button class="act act--primary" data-action="miss" ${lock ? 'disabled' : ''}>Miss</button>
+        ${g.target ? '' : `<button class="act" data-action="finish" ${lock ? 'disabled' : ''}>Finish</button>`}
         <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
       </div>
+      <div class="strokelist">${strokes}</div>
       <div class="links">
         <button data-action="newgame">New game</button>
       </div>
@@ -1105,7 +1126,13 @@ function renderPlayer() {
   const label = game === 'snooker' ? 'snooker' : 'billiards';
   const drills = drillCard(prof.id, game);
 
-  if (a.breaks === 0 && fs.played === 0 && !drills) {
+  // Side B = the "(2)" identity from this player's solo games.
+  const sbProf = { id: soloSideId(prof.id), name: prof.name + ' (2)' };
+  const sb = summarize(sbProf, game);
+  const sbDrills = drillCard(sbProf.id, game);
+  const hasSideB = sb.breaks.breaks > 0 || sb.frames.played > 0 || !!sbDrills;
+
+  if (a.breaks === 0 && fs.played === 0 && !drills && !hasSideB) {
     document.getElementById('player-body').innerHTML = gameToggle() +
       `<div class="stats-empty">No ${label} data recorded for ${escapeHtml(prof.name)} yet.</div>`;
     return;
@@ -1118,6 +1145,16 @@ function renderPlayer() {
   }
   body += drills;
   body += `<h3 class="stats-h">Recent breaks</h3><div class="log">${breakLog(App.allRecords().filter(r => r.g === game), prof)}</div>`;
+
+  if (hasSideB) {
+    body += `<h3 class="stats-h">Solo — Side B (“${escapeHtml(sbProf.name)}”)</h3>`;
+    if (sb.breaks.breaks > 0 || sb.frames.played > 0) {
+      body += statDetail(sb.breaks) + milestoneCard(sb.breaks) + recordCard(game, sb.frames, sb.matches);
+      if (game === 'snooker') body += playCard(sb.frames);
+    }
+    body += sbDrills;
+  }
+
   document.getElementById('player-body').innerHTML = body;
 }
 
@@ -1198,6 +1235,7 @@ function initDrillSetup(drill) {
 
 function renderDrills() {
   const game = App.drillGame;
+  const gname = game === 'snooker' ? 'Snooker' : 'Billiards';
   const list = DRILLS.filter(d => d.game === game).map(d => `
       <button class="card card--drill" data-action="pick-drill" data-drill="${d.id}">
         <div><h2 class="card__title">${escapeHtml(d.name)}</h2><p class="card__sub">${escapeHtml(d.blurb)}</p></div>
@@ -1206,7 +1244,7 @@ function renderDrills() {
   document.getElementById('screen-drills').innerHTML = `
     <header class="appbar">
       <button class="appbar__btn appbar__btn--icon" data-nav="home">${ICONS.back}<span>Menu</span></button>
-      <div class="appbar__title">Practice Drills</div>
+      <div class="appbar__title">Practice</div>
       <span class="appbar__btn appbar__btn--ghost"></span>
     </header>
     <div class="screen__body">
@@ -1214,8 +1252,33 @@ function renderDrills() {
         <button class="seg__btn ${game === 'snooker' ? 'seg__btn--active' : ''}" data-action="drill-game" data-game="snooker">Snooker</button>
         <button class="seg__btn ${game === 'billiards' ? 'seg__btn--active' : ''}" data-action="drill-game" data-game="billiards">Billiards</button>
       </div>
+      <h3 class="stats-h">Solo game</h3>
+      <button class="card card--drill" data-action="solo-game">
+        <div><h2 class="card__title">Solo ${gname}</h2><p class="card__sub">Play a full game by yourself — your two sides are tracked separately (you and “you (2)”).</p></div>
+        <span class="card__go">›</span>
+      </button>
+      <h3 class="stats-h">Drills</h3>
       ${list}
     </div>`;
+}
+
+function openSoloPicker() {
+  const game = App.drillGame;
+  openOverlay(`
+    <h3>Solo ${game === 'snooker' ? 'snooker' : 'billiards'}</h3>
+    <p class="muted">Which player is this game for?</p>
+    <div class="foul-grid" style="grid-template-columns:1fr">
+      ${App.profiles.map(p => `<button class="foul-btn" data-solo="${p.id}" style="font-size:16px">${escapeHtml(p.name)}</button>`).join('')}
+    </div>
+    <button class="modal__cancel" data-cancel>Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelectorAll('[data-solo]').forEach(b => b.onclick = () => {
+    const pid = b.dataset.solo;
+    closeOverlay();
+    if (game === 'snooker') { App.newSnooker(pid); showScreen('snooker'); }
+    else { App.newBilliards(pid); showScreen('billiards'); }
+  });
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
 }
 
 function handleSetupToggle(d) {
