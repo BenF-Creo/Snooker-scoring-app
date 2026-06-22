@@ -19,6 +19,8 @@ const BILLIARDS_STROKES = [
     scene: [{ role: 'opp' }, { role: 'cue', badge: 'inoff' }] },
 
   // Combination strokes — several scores made in a single stroke
+  { key: 'potInOffRed',    group: 'combo', base: 'Pot + in-off red', value: 6, sub: '3 + 3',
+    scene: [{ role: 'red', badge: 'pot' }, { role: 'cue', badge: 'inoff' }] },
   { key: 'five',           group: 'combo', base: 'Five', value: 5, sub: 'cannon + in-off red',
     scene: [{ role: 'opp' }, { role: 'red' }, { role: 'cue', badge: 'inoff' }] },
   { key: 'cannonPotRed',   group: 'combo', base: 'Cannon + pot red', value: 5, sub: '2 + 3',
