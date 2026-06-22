@@ -129,6 +129,18 @@ class BilliardsGame {
     }
   }
 
+  // Concede: `loser` is the seat giving up; the opponent wins. Result counts.
+  concede(loser) {
+    if (this.isOver || this.currentPlayer === null) return;
+    if (loser !== 0 && loser !== 1) loser = this.currentPlayer;
+    this._pushUndo();
+    this._recordVisit();
+    this.currentBreak = 0;
+    this.isOver = true;
+    this.endTime = Date.now();
+    this.winner = 1 - loser;
+  }
+
   finishGame() {
     if (this.isOver || this.currentPlayer === null) return;
     this._pushUndo();

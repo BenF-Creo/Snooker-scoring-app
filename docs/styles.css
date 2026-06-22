@@ -314,6 +314,16 @@ body {
 .cueswap__p { display: inline-flex; align-items: center; gap: 6px; }
 .cueswap__icon { color: var(--muted); font-size: 15px; }
 
+/* ---------- Fixed single-screen with an internal scroller (billiards) ---------- */
+.screen--fit.active { height: 100vh; height: 100dvh; }
+.screen--fit .screen__body { overflow: hidden; padding-bottom: 10px; }
+.screen--fit .strokelist {
+  flex: 1; min-height: 0; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+}
+.screen--fit .links { padding-bottom: calc(2px + env(safe-area-inset-bottom)); }
+
 /* ---------- Billiards scoring list ---------- */
 .strokelist { display: flex; flex-direction: column; gap: 8px; }
 .strokelist__sep {

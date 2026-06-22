@@ -468,6 +468,8 @@ const App = {
         case 'foul': g.foul(); afterBilliards(); break;
         case 'undo': g.undo(); afterBilliards(); break;
         case 'finish': g.finishGame(); afterBilliards(); break;
+        case 'concede': openBilliardsConcede(); break;
+        case 'leave': confirmLeaveBilliards(); break;
         case 'newgame': App.newBilliards(); afterBilliards(); break;
       }
     });
@@ -873,11 +875,49 @@ function renderBilliards() {
       </div>
       <div class="strokelist">${strokes}</div>
       <div class="links">
+        <button data-action="concede" ${lock ? 'disabled' : ''}>Concede</button>
+        <button data-action="leave">Leave (don’t count)</button>
         <button data-action="newgame">New game</button>
       </div>
     </div>`;
 
   if (g.isOver) showBilliardsResult();
+}
+
+function openBilliardsConcede() {
+  const g = App.billiards;
+  if (g.isOver || g.currentPlayer === null) return;
+  openOverlay(`
+    <h3>Concede game</h3>
+    <p class="muted">Who is conceding?</p>
+    <div class="foul-grid" style="grid-template-columns:1fr 1fr">
+      <button class="foul-btn" data-loser="0" style="font-size:16px">${escapeHtml(App.gamePlayerName(g, 0))}</button>
+      <button class="foul-btn" data-loser="1" style="font-size:16px">${escapeHtml(App.gamePlayerName(g, 1))}</button>
+    </div>
+    <button class="modal__cancel" data-cancel>Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelectorAll('[data-loser]').forEach(b => b.onclick = () => {
+    g.concede(parseInt(b.dataset.loser, 10));
+    closeOverlay();
+    afterBilliards();
+  });
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
+}
+
+function confirmLeaveBilliards() {
+  openOverlay(`
+    <h3>Leave game</h3>
+    <p class="muted">End this game without counting it? Nothing from this game will be saved.</p>
+    <button class="primary primary--danger" data-leave>Leave, don’t count</button>
+    <button class="modal__cancel" data-cancel style="margin-top:10px">Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-leave]').onclick = () => {
+    App.billiards = null;
+    try { localStorage.removeItem(KEYS.billiards); } catch (e) { /* ignore */ }
+    closeOverlay();
+    showScreen('home');
+  };
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
 }
 
 function showBilliardsResult() {
