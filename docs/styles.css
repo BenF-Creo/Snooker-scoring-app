@@ -335,9 +335,9 @@ body {
 .strokerow__val { font-size: 18px; font-weight: 800; color: var(--accent-2); flex: none; min-width: 36px; text-align: right; }
 
 /* ---------- Action row ---------- */
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .act {
-  flex: 1; appearance: none; border: 1px solid var(--line-strong);
+  flex: 1 1 84px; appearance: none; border: 1px solid var(--line-strong);
   border-radius: 12px; padding: 14px 8px; font-size: 14px; font-weight: 700;
   letter-spacing: 0.02em; cursor: pointer; min-height: var(--tap);
   color: var(--text); background: var(--surface);
@@ -346,6 +346,7 @@ body {
 .act:disabled { opacity: 0.38; }
 .act--primary { border-color: transparent; background: rgba(200, 169, 106, 0.16); color: var(--accent-2); }
 .act--warn { border-color: transparent; background: rgba(224, 138, 107, 0.16); color: var(--danger); }
+.act--freeball-on { border-color: transparent; background: linear-gradient(180deg, var(--accent-2), var(--accent)); color: #2a1f08; }
 
 .links { display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: center; padding-top: 4px; }
 .links button {
@@ -371,6 +372,10 @@ select.field__input {
   background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
 }
 .form__note { color: var(--faint); font-size: 12.5px; line-height: 1.55; margin: 0; }
+.form__section { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; border-top: 1px solid var(--line); }
+.form__heading { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-2); }
+.field-row { display: flex; gap: 12px; }
+.field--half { flex: 1; min-width: 0; }
 
 /* ---------- Rules ---------- */
 .rules { line-height: 1.6; }
@@ -600,4 +605,52 @@ select.field__input {
   appearance: none; border: none;
   background: linear-gradient(180deg, var(--accent-2), var(--accent)); color: #2a1f08;
   border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 750; cursor: pointer; width: 100%; margin-top: 16px;
+}
+
+/* ---------- Landscape (phones held sideways) ---------- */
+/* Split the game screens into two columns — scoreboard on the left, the
+   controls the striker taps on the right — so nothing needs scrolling on a
+   short viewport. Tablets (taller than 600px) keep the standard layout. */
+@media (orientation: landscape) and (max-height: 600px) {
+  #app { max-width: 960px; }
+
+  #screen-snooker .screen__body,
+  #screen-billiards .screen__body {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: 20px;
+    row-gap: 10px;
+    align-content: start;
+    padding-top: 12px;
+  }
+
+  /* Match info and the bottom menu links stretch the full width. */
+  #screen-snooker .screen__body > .tally,
+  #screen-billiards .screen__body > .tally,
+  #screen-snooker .screen__body > .links,
+  #screen-billiards .screen__body > .links { grid-column: 1 / -1; }
+
+  /* Scoreboard fills the left column, players stacked vertically. */
+  #screen-snooker .screen__body > .panels,
+  #screen-billiards .screen__body > .panels {
+    grid-column: 1; grid-row: 2 / 100; align-self: start;
+    flex-direction: column;
+  }
+
+  /* Everything the striker interacts with sits in the right column. */
+  #screen-snooker .screen__body > .status,
+  #screen-snooker .screen__body > .breakoff,
+  #screen-snooker .screen__body > .balls,
+  #screen-snooker .screen__body > .actions,
+  #screen-billiards .screen__body > .breakoff,
+  #screen-billiards .screen__body > .actions,
+  #screen-billiards .screen__body > .strokelist { grid-column: 2; }
+
+  /* Compact scoreboard so the taller stacked panels still fit. */
+  .panel__score { font-size: 40px; margin: 2px 0; }
+  .panel { padding: 10px 12px; }
+  .panel__stats { margin-top: 7px; padding-top: 7px; }
+
+  /* Cap the billiards stroke list so it scrolls within its column. */
+  #screen-billiards .screen__body > .strokelist { max-height: 46vh; overflow-y: auto; }
 }

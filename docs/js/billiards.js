@@ -32,10 +32,11 @@ const BILLIARDS_STROKES = [
 ];
 
 class BilliardsGame {
-  constructor(target) {
+  constructor(target, handicaps) {
     // target is a number, or null for "no limit".
     this.target = (target === null || target === undefined) ? 100 : target;
-    this.scores = [0, 0];
+    this.handicaps = (handicaps && handicaps.length === 2) ? handicaps.slice() : [0, 0];
+    this.scores = [this.handicaps[0] || 0, this.handicaps[1] || 0];   // start on handicap
     this.currentPlayer = null;   // chosen at break-off; null = not started
     this.currentBreak = 0;
     this.highBreaks = [0, 0];
@@ -70,8 +71,7 @@ class BilliardsGame {
   }
 
   get frameFresh() {
-    return !this.isOver && this.visits === 0 && this.currentBreak === 0 &&
-      this.scores[0] === 0 && this.scores[1] === 0;
+    return !this.isOver && this.visits === 0 && this.currentBreak === 0;
   }
 
   setBreaker(seat) {

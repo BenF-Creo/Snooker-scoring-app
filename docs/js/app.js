@@ -24,7 +24,7 @@ const ICONS = {
 };
 
 const App = {
-  settings: { playerNames: ['Player 1', 'Player 2'], players: null, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100 },
+  settings: { playerNames: ['Player 1', 'Player 2'], players: null, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100, snookerHandicaps: [0, 0], billiardsHandicaps: [0, 0] },
   profiles: [],
   snooker: null,
   billiards: null,
@@ -102,7 +102,9 @@ const App = {
   newSnooker(soloPid) {
     if (soloPid === undefined) soloPid = (this.snooker && this.snooker.solo) ? this.snooker.soloPid : null;
     this._flushBreaks(this.snooker, 'snooker');
-    this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds);
+    // Handicaps only apply to a normal two-player game, not solo practice.
+    const shcp = soloPid ? [0, 0] : (this.settings.snookerHandicaps || [0, 0]);
+    this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds, shcp);
     this.snooker.solo = !!soloPid;
     this.snooker.soloPid = soloPid || null;
     this.snooker.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice();
@@ -112,7 +114,8 @@ const App = {
   newBilliards(soloPid) {
     if (soloPid === undefined) soloPid = (this.billiards && this.billiards.solo) ? this.billiards.soloPid : null;
     this._flushBreaks(this.billiards, 'billiards');
-    this.billiards = new BilliardsGame(this.settings.billiardsTarget);
+    const bhcp = soloPid ? [0, 0] : (this.settings.billiardsHandicaps || [0, 0]);
+    this.billiards = new BilliardsGame(this.settings.billiardsTarget, bhcp);
     this.billiards.solo = !!soloPid;
     this.billiards.soloPid = soloPid || null;
     this.billiards.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice();
@@ -289,6 +292,70 @@ const App = {
     try { localStorage.setItem(KEYS.settings, JSON.stringify(this.settings)); } catch (e) { /* ignore */ }
   },
 
+  // --- backup & restore ---
+
+  // Bundle every stored key into one downloadable JSON file.
+  exportBackup() {
+    const data = {};
+    Object.keys(KEYS).forEach(k => {
+      const raw = localStorage.getItem(KEYS[k]);
+      if (raw !== null) { try { data[k] = JSON.parse(raw); } catch (e) { /* skip corrupt */ } }
+    });
+    const payload = { app: 'cue-scorer', kind: 'backup', version: 1, exported: new Date().toISOString(), data: data };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cue-scorer-backup-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+
+  // Read a backup file and, on confirmation, replace all stored data with it.
+  importBackup(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let payload;
+      try { payload = JSON.parse(reader.result); } catch (e) { payload = null; }
+      const data = payload && payload.data;
+      if (!payload || payload.app !== 'cue-scorer' || !data || typeof data !== 'object') {
+        openInfo('Restore failed', 'That file isn’t a valid Cue Scorer backup.');
+        return;
+      }
+      const validKeys = Object.keys(KEYS).filter(k => data.hasOwnProperty(k));
+      if (!validKeys.length) {
+        openInfo('Restore failed', 'The backup file contained no recognisable data.');
+        return;
+      }
+      const when = payload.exported ? new Date(payload.exported).toLocaleString() : 'an unknown date';
+      openConfirm('Restore backup?',
+        'This replaces all profiles, statistics, games and settings on this device with the backup from ' + when + '. This can’t be undone.',
+        'Restore', () => {
+          try {
+            // Clear existing keys, then write those present in the backup.
+            Object.keys(KEYS).forEach(k => localStorage.removeItem(KEYS[k]));
+            validKeys.forEach(k => localStorage.setItem(KEYS[k], JSON.stringify(data[k])));
+          } catch (e) { openInfo('Restore failed', 'Could not write to storage.'); return; }
+          // Reload all in-memory state from the freshly restored storage.
+          this.settings = { playerNames: ['Player 1', 'Player 2'], players: null, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100, snookerHandicaps: [0, 0], billiardsHandicaps: [0, 0] };
+          this.profiles = [];
+          this.snooker = null;
+          this.billiards = null;
+          this._loadSettings();
+          this._loadProfiles();
+          this._loadGames();
+          this._fillSettingsForm();
+          this._updateHomePlayers();
+          openInfo('Restore complete', 'Your backup from ' + when + ' has been restored.');
+        });
+    };
+    reader.onerror = () => openInfo('Restore failed', 'Could not read that file.');
+    reader.readAsText(file);
+  },
+
   _loadProfiles() {
     try {
       const p = JSON.parse(localStorage.getItem(KEYS.profiles));
@@ -337,6 +404,8 @@ const App = {
     if (f.misses === undefined) f.misses = [0, 0];
     if (f.safeties === undefined) f.safeties = [0, 0];
     if (f.fouls === undefined) f.fouls = [0, 0];
+    if (f.freeBall === undefined) f.freeBall = false;
+    if (!Array.isArray(g.handicaps)) g.handicaps = [0, 0];
     if (f.endTime === undefined) f.endTime = null;
     if (f.startTime === undefined) {
       f.startTime = null;
@@ -350,6 +419,7 @@ const App = {
 
   _migrateBilliards(g) {
     if (!Array.isArray(g.breaks)) g.breaks = [];
+    if (!Array.isArray(g.handicaps)) g.handicaps = [0, 0];
     if (g.endTime === undefined) g.endTime = null;
     if (g.startTime === undefined) {
       g.startTime = null;
@@ -373,6 +443,17 @@ const App = {
     bestOf.value = String(this.settings.snookerBestOf);
 
     document.getElementById('set-target').value = this.settings.billiardsTarget ? String(this.settings.billiardsTarget) : '';
+
+    const shcp = this.settings.snookerHandicaps || [0, 0];
+    const bhcp = this.settings.billiardsHandicaps || [0, 0];
+    document.getElementById('set-hcap-s0').value = String(shcp[0] || 0);
+    document.getElementById('set-hcap-s1').value = String(shcp[1] || 0);
+    document.getElementById('set-hcap-b0').value = String(bhcp[0] || 0);
+    document.getElementById('set-hcap-b1').value = String(bhcp[1] || 0);
+    document.getElementById('set-hcap-s0-label').textContent = 'Snooker — ' + this.playerName(0);
+    document.getElementById('set-hcap-s1-label').textContent = 'Snooker — ' + this.playerName(1);
+    document.getElementById('set-hcap-b0-label').textContent = 'Billiards — ' + this.playerName(0);
+    document.getElementById('set-hcap-b1-label').textContent = 'Billiards — ' + this.playerName(1);
   },
 
   _bindSettingsForm() {
@@ -393,18 +474,39 @@ const App = {
       this._saveSettings();
       this._refreshPristineGames();
     });
+
+    const hcapInput = (id, arrKey, idx) => {
+      document.getElementById(id).addEventListener('input', e => {
+        const v = parseInt(e.target.value, 10);
+        if (!this.settings[arrKey]) this.settings[arrKey] = [0, 0];
+        this.settings[arrKey][idx] = (isNaN(v) || v < 0) ? 0 : v;
+        this._saveSettings();
+        this._refreshPristineGames();
+      });
+    };
+    hcapInput('set-hcap-s0', 'snookerHandicaps', 0);
+    hcapInput('set-hcap-s1', 'snookerHandicaps', 1);
+    hcapInput('set-hcap-b0', 'billiardsHandicaps', 0);
+    hcapInput('set-hcap-b1', 'billiardsHandicaps', 1);
+
+    document.getElementById('set-export').addEventListener('click', () => this.exportBackup());
+    document.getElementById('set-import').addEventListener('click', () => document.getElementById('set-import-file').click());
+    document.getElementById('set-import-file').addEventListener('change', e => {
+      const file = e.target.files && e.target.files[0];
+      if (file) this.importBackup(file);
+      e.target.value = '';
+    });
   },
 
   // Apply length/reds/target changes to a game that hasn't been scored yet, so
   // the setting feels live; an in-progress game is left untouched.
   _refreshPristineGames() {
     const s = this.snooker;
-    if (s && s.frameNumber === 1 && s.framesWon[0] === 0 && s.framesWon[1] === 0 &&
-        s.frame.scores[0] === 0 && s.frame.scores[1] === 0 && !s.frame.isOver) {
+    if (s && s.frameNumber === 1 && s.framesWon[0] === 0 && s.framesWon[1] === 0 && s.frameFresh) {
       this.newSnooker();
     }
     const b = this.billiards;
-    if (b && b.scores[0] === 0 && b.scores[1] === 0 && !b.isOver) {
+    if (b && b.frameFresh) {
       this.newBilliards();
     }
     this._renderActive();
@@ -444,6 +546,7 @@ const App = {
         case 'rules': showScreen('rules-snooker'); break;
         case 'breaker': g.setBreaker(+t.dataset.seat); afterSnooker(); break;
         case 'pot': g.pot(t.dataset.key); afterSnooker(); break;
+        case 'freeball': g.toggleFreeBall(); afterSnooker(); break;
         case 'safety': g.safety(); afterSnooker(); break;
         case 'miss': g.miss(); afterSnooker(); break;
         case 'foul': openFoulModal(); break;
@@ -623,6 +726,27 @@ function closeOverlay() {
   o.innerHTML = '';
 }
 
+// Simple dismissable message modal.
+function openInfo(title, message) {
+  openOverlay(`
+    <h3>${escapeHtml(title)}</h3>
+    <p class="muted">${escapeHtml(message)}</p>
+    <button class="primary" data-ok>OK</button>`);
+  document.getElementById('overlay').querySelector('[data-ok]').onclick = closeOverlay;
+}
+
+// Confirm modal: runs onYes when the primary (danger) button is pressed.
+function openConfirm(title, message, yesLabel, onYes) {
+  openOverlay(`
+    <h3>${escapeHtml(title)}</h3>
+    <p class="muted">${escapeHtml(message)}</p>
+    <button class="primary primary--danger" data-yes>${escapeHtml(yesLabel || 'Confirm')}</button>
+    <button class="modal__cancel" data-cancel style="margin-top:10px">Cancel</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-yes]').onclick = () => { closeOverlay(); onYes(); };
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
+}
+
 /* ---------- snooker rendering ---------- */
 
 function afterSnooker() { App.saveGames(); renderSnooker(); }
@@ -695,6 +819,10 @@ function renderSnooker() {
   let nextText, nextDot = '';
   if (f.isOver) {
     nextText = 'Frame over';
+  } else if (f.freeBall) {
+    nextText = 'Free ball — pot any';
+  } else if (f.phase.type === 'respot') {
+    nextText = 'Re-spotted black'; nextDot = '<span class="dot-ball chip--black"></span>';
   } else if (f.phase.type === 'red') {
     nextText = 'Red'; nextDot = '<span class="dot-ball chip--red"></span>';
   } else if (f.phase.type === 'colour') {
@@ -728,6 +856,7 @@ function renderSnooker() {
         <button class="act act--primary" data-action="miss" ${f.isOver || !g.started ? 'disabled' : ''}>Miss</button>
         <button class="act act--warn" data-action="foul" ${f.isOver || !g.started ? 'disabled' : ''}>Foul</button>
         <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+        <button class="act ${f.freeBall ? 'act--freeball-on' : ''}" data-action="freeball" ${f.isOver || !g.started || f.phase.type === 'respot' ? 'disabled' : ''}>${f.freeBall ? 'Free ball ✓' : 'Free ball'}</button>
       </div>
       <div class="links">
         <button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>

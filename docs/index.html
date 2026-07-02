@@ -157,6 +157,39 @@
 
         <p class="form__note">Names apply to both games. Changing the reds, match length or target updates a game that hasn’t started yet, otherwise it applies to the next new game.</p>
 
+        <div class="form__section">
+          <h3 class="form__heading">Handicaps</h3>
+          <p class="form__note">Give a player a head start — they begin each frame/game on these points. Leave at 0 for none. Handicaps don’t apply to solo practice.</p>
+          <div class="field-row">
+            <label class="field field--half">
+              <span class="field__label" id="set-hcap-s0-label">Snooker — Player 1</span>
+              <input id="set-hcap-s0" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+            <label class="field field--half">
+              <span class="field__label" id="set-hcap-s1-label">Snooker — Player 2</span>
+              <input id="set-hcap-s1" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field field--half">
+              <span class="field__label" id="set-hcap-b0-label">Billiards — Player 1</span>
+              <input id="set-hcap-b0" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+            <label class="field field--half">
+              <span class="field__label" id="set-hcap-b1-label">Billiards — Player 2</span>
+              <input id="set-hcap-b1" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+          </div>
+        </div>
+
+        <div class="form__section">
+          <h3 class="form__heading">Data backup</h3>
+          <p class="form__note">Your profiles, statistics and settings live only on this device. Export a backup file to keep them safe, or restore one on a new device. Restoring replaces everything currently stored.</p>
+          <button class="btn btn--block" id="set-export">Export backup</button>
+          <button class="btn btn--block" id="set-import">Restore from file…</button>
+          <input id="set-import-file" type="file" accept="application/json,.json" hidden />
+        </div>
+
         <button class="btn btn--primary btn--block" data-nav="home">Done</button>
       </div>
     </section>

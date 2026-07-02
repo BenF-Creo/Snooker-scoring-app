@@ -15,9 +15,10 @@ const BREAK_MILESTONES = [10, 20, 30, 50, 70, 90, 100, 120, 147];
 function ballByValue(v) { return SNOOKER_BALLS.find(b => b.value === v); }
 
 class SnookerGame {
-  constructor(bestOf, reds) {
+  constructor(bestOf, reds, handicaps) {
     this.bestOf = bestOf || 5;
     this.reds = (reds === 10) ? 10 : 15;   // standard 15, or the shorter 10-red game
+    this.handicaps = (handicaps && handicaps.length === 2) ? handicaps.slice() : [0, 0];
     this.framesWon = [0, 0];
     this.frameNumber = 1;
     this.startingPlayer = 0;          // last player to break off (not pre-selected)
@@ -38,15 +39,16 @@ class SnookerGame {
 
   resetFrame() {
     this.frame = {
-      scores: [0, 0],
+      scores: [this.handicaps[0] || 0, this.handicaps[1] || 0],   // start on handicap
       redsRemaining: this.reds,
-      phase: { type: 'red' },          // 'red' | 'colour' | 'sequence'(value)
+      phase: { type: 'red' },          // 'red' | 'colour' | 'sequence'(value) | 'respot'
       currentPlayer: null,             // chosen at break-off; null = not started
       currentBreak: 0,
       highBreaks: [0, 0],
       breaker: null,
       scored: false,
       visits: 0,
+      freeBall: false,
       startTime: null,                 // set when the break-off player is chosen
       endTime: null,
       pots: [0, 0],
@@ -64,8 +66,7 @@ class SnookerGame {
   // Still at the opening break-off (nothing scored yet) — breaker can be re-picked.
   get frameFresh() {
     const f = this.frame;
-    return !f.isOver && f.visits === 0 && f.currentBreak === 0 &&
-      f.scores[0] === 0 && f.scores[1] === 0;
+    return !f.isOver && f.visits === 0 && f.currentBreak === 0;
   }
 
   // Choose who breaks off; starts the frame timer. Re-pickable until play begins.
@@ -78,14 +79,22 @@ class SnookerGame {
     if (this.frame.startTime === null) this.frame.startTime = Date.now();
   }
 
+  toggleFreeBall() {
+    const f = this.frame;
+    if (f.isOver || f.currentPlayer === null || f.phase.type === 'respot') return;
+    f.freeBall = !f.freeBall;
+  }
+
   // --- queries ---
 
   legalKeys() {
     const f = this.frame;
     if (f.isOver || f.currentPlayer === null) return [];
+    if (f.freeBall) return ['red', 'yellow', 'green', 'brown', 'blue', 'pink', 'black'];
     if (f.phase.type === 'red') return ['red'];
     if (f.phase.type === 'colour') return ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
     if (f.phase.type === 'sequence') { const b = ballByValue(f.phase.value); return b ? [b.key] : []; }
+    if (f.phase.type === 'respot') return ['black'];
     return [];
   }
 
@@ -108,6 +117,8 @@ class SnookerGame {
 
   nextUp() {
     const f = this.frame;
+    if (f.freeBall) return 'Free ball — pot any';
+    if (f.phase.type === 'respot') return 'Re-spotted black — pot to win';
     if (f.phase.type === 'red') return 'Pot a red';
     if (f.phase.type === 'colour') return 'Pot any colour';
     const b = ballByValue(f.phase.value);
@@ -119,6 +130,7 @@ class SnookerGame {
   pot(key) {
     const f = this.frame;
     if (f.isOver || f.currentPlayer === null || !this.legalKeys().includes(key)) return;
+    if (f.freeBall) { this._potFreeBall(key); return; }
     this._pushUndo();
 
     const ball = SNOOKER_BALLS.find(b => b.key === key);
@@ -135,12 +147,41 @@ class SnookerGame {
       f.phase = f.redsRemaining > 0 ? { type: 'red' } : { type: 'sequence', value: 2 };
     } else if (f.phase.type === 'sequence') {
       if (f.phase.value >= 7) {
-        const w = this.leader();
-        this._finishFrame(w === null ? f.currentPlayer : w);
+        // Black potted. If the scores are level it goes to a re-spotted black.
+        if (f.scores[0] === f.scores[1]) f.phase = { type: 'respot' };
+        else this._finishFrame(this.leader());
       } else {
         f.phase = { type: 'sequence', value: f.phase.value + 1 };
       }
+    } else if (f.phase.type === 'respot') {
+      // Potting the re-spotted black wins the frame.
+      this._finishFrame(p);
     }
+  }
+
+  // Free ball: the potted ball scores as the ball "on" (a red = 1, a colour = its
+  // value); the nominated ball is re-spotted so the red count doesn't change.
+  _potFreeBall(key) {
+    const f = this.frame;
+    this._pushUndo();
+    const p = f.currentPlayer;
+    f.freeBall = false;
+    f.pots[p] += 1;
+    f.scored = true;
+    let val = 0;
+    if (f.phase.type === 'red') {
+      val = 1;
+      f.phase = { type: 'colour' };
+    } else if (f.phase.type === 'colour') {
+      const ball = SNOOKER_BALLS.find(b => b.key === key);
+      val = ball ? ball.value : 2;
+      f.phase = f.redsRemaining > 0 ? { type: 'red' } : { type: 'sequence', value: 2 };
+    } else if (f.phase.type === 'sequence') {
+      val = f.phase.value;   // scores the colour on; that colour is still on
+    }
+    f.scores[p] += val;
+    f.currentBreak += val;
+    f.highBreaks[p] = Math.max(f.highBreaks[p], f.currentBreak);
   }
 
   // A played safety (no pot) — ends the visit.
@@ -155,8 +196,11 @@ class SnookerGame {
     this._pushUndo();
     f.fouls[f.currentPlayer] += 1;
     f.scored = true;                 // a foul puts points on the board: opening phase ends
-    this._recordVisit('foul');
+    f.freeBall = false;
     f.scores[1 - f.currentPlayer] += Math.max(4, points);
+    // A foul on the re-spotted black loses the frame.
+    if (f.phase.type === 'respot') { this._finishFrame(1 - f.currentPlayer); return; }
+    this._recordVisit('foul');
     this._switchPlayer();
   }
 
