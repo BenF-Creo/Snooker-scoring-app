@@ -607,50 +607,47 @@ select.field__input {
   border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 750; cursor: pointer; width: 100%; margin-top: 16px;
 }
 
+/* ---------- Play field wrapper ---------- */
+/* In portrait these wrappers are transparent (display: contents), so the
+   scoreboard and controls flow down the screen exactly as their children.
+   In landscape they become two side-by-side columns (see media query). */
+.playfield, .playfield__score, .playfield__controls { display: contents; }
+
 /* ---------- Landscape (phones held sideways) ---------- */
-/* Split the game screens into two columns — scoreboard on the left, the
-   controls the striker taps on the right — so nothing needs scrolling on a
-   short viewport. Tablets (taller than 600px) keep the standard layout. */
+/* Scoreboard on the left, the controls the striker taps on the right, so a
+   short viewport doesn't overflow. Tablets (taller than 600px) are roomy
+   enough to keep the standard single-column layout. */
 @media (orientation: landscape) and (max-height: 600px) {
-  #app { max-width: 960px; }
+  #app { max-width: 100%; }
 
-  #screen-snooker .screen__body,
-  #screen-billiards .screen__body {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    column-gap: 20px;
-    row-gap: 10px;
-    align-content: start;
-    padding-top: 12px;
+  .screen__body {
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    gap: 10px;
   }
+  .appbar { padding: calc(6px + env(safe-area-inset-top)) 10px 8px; }
 
-  /* Match info and the bottom menu links stretch the full width. */
-  #screen-snooker .screen__body > .tally,
-  #screen-billiards .screen__body > .tally,
-  #screen-snooker .screen__body > .links,
-  #screen-billiards .screen__body > .links { grid-column: 1 / -1; }
+  /* Two columns. The wrappers stop being transparent and lay out as flex. */
+  .playfield { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; }
+  .playfield__score { display: flex; flex-direction: column; gap: 10px; flex: 4 1 0; min-width: 0; }
+  .playfield__controls { display: flex; flex-direction: column; gap: 10px; flex: 6 1 0; min-width: 0; }
 
-  /* Scoreboard fills the left column, players stacked vertically. */
-  #screen-snooker .screen__body > .panels,
-  #screen-billiards .screen__body > .panels {
-    grid-column: 1; grid-row: 2 / 100; align-self: start;
-    flex-direction: column;
-  }
+  /* Scoreboard: stack the two players vertically and shrink the big number. */
+  .playfield__score .panels { flex-direction: column; gap: 10px; }
+  .playfield__score .panel { padding: 9px 12px; }
+  .playfield__score .panel__score { font-size: 34px; margin: 1px 0; }
+  .playfield__score .panel__turn { min-height: 16px; }
+  .playfield__score .panel__stats { margin-top: 6px; padding-top: 6px; gap: 14px; }
 
-  /* Everything the striker interacts with sits in the right column. */
-  #screen-snooker .screen__body > .status,
-  #screen-snooker .screen__body > .breakoff,
-  #screen-snooker .screen__body > .balls,
-  #screen-snooker .screen__body > .actions,
-  #screen-billiards .screen__body > .breakoff,
-  #screen-billiards .screen__body > .actions,
-  #screen-billiards .screen__body > .strokelist { grid-column: 2; }
+  /* All seven balls on one row keeps the control column short. */
+  .playfield__controls .balls { grid-template-columns: repeat(7, 1fr); gap: 7px; }
+  .playfield__controls .ball { font-size: 15px; }
+  .playfield__controls .ball__badge { font-size: 9px; padding: 1px 5px; }
 
-  /* Compact scoreboard so the taller stacked panels still fit. */
-  .panel__score { font-size: 40px; margin: 2px 0; }
-  .panel { padding: 10px 12px; }
-  .panel__stats { margin-top: 7px; padding-top: 7px; }
+  /* Stroke list scrolls inside its own column instead of pushing the page. */
+  .playfield__controls .strokelist { max-height: 48vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Cap the billiards stroke list so it scrolls within its column. */
-  #screen-billiards .screen__body > .strokelist { max-height: 46vh; overflow-y: auto; }
+  /* Non-game screens stay a comfortable reading width, centred; the two
+     game screens use the full width for their side-by-side columns. */
+  .screen__body { max-width: 640px; margin: 0 auto; width: 100%; }
+  #screen-snooker .screen__body, #screen-billiards .screen__body { max-width: 100%; }
 }

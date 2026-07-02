@@ -844,19 +844,25 @@ function renderSnooker() {
         <span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> ${g.casual ? 'casual frame' : 'frames'}</span>
         <span class="tally__sep">${g.casual ? 'Single frame' : 'First to ' + g.framesToWin}${timerChip(g.frame.startTime, g.frame.endTime)}</span>
       </div>
-      <div class="panels">${panels}</div>
-      ${g.frameFresh ? breakoffChooser(g, name) : `
-      <div class="status">
-        <div class="status__next"><span class="status__label">Next</span>${nextDot}<span class="status__text">${nextText}</span></div>
-        <div class="status__remain"><b>${g.pointsRemaining()}</b> remaining</div>
-      </div>`}
-      <div class="balls">${balls}</div>
-      <div class="actions">
-        <button class="act act--primary" data-action="safety" ${f.isOver || !g.started ? 'disabled' : ''}>Safety</button>
-        <button class="act act--primary" data-action="miss" ${f.isOver || !g.started ? 'disabled' : ''}>Miss</button>
-        <button class="act act--warn" data-action="foul" ${f.isOver || !g.started ? 'disabled' : ''}>Foul</button>
-        <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
-        <button class="act ${f.freeBall ? 'act--freeball-on' : ''}" data-action="freeball" ${f.isOver || !g.started || f.phase.type === 'respot' ? 'disabled' : ''}>${f.freeBall ? 'Free ball ✓' : 'Free ball'}</button>
+      <div class="playfield">
+        <div class="playfield__score">
+          <div class="panels">${panels}</div>
+        </div>
+        <div class="playfield__controls">
+          ${g.frameFresh ? breakoffChooser(g, name) : `
+          <div class="status">
+            <div class="status__next"><span class="status__label">Next</span>${nextDot}<span class="status__text">${nextText}</span></div>
+            <div class="status__remain"><b>${g.pointsRemaining()}</b> remaining</div>
+          </div>`}
+          <div class="balls">${balls}</div>
+          <div class="actions">
+            <button class="act act--primary" data-action="safety" ${f.isOver || !g.started ? 'disabled' : ''}>Safety</button>
+            <button class="act act--primary" data-action="miss" ${f.isOver || !g.started ? 'disabled' : ''}>Miss</button>
+            <button class="act act--warn" data-action="foul" ${f.isOver || !g.started ? 'disabled' : ''}>Foul</button>
+            <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+            <button class="act ${f.freeBall ? 'act--freeball-on' : ''}" data-action="freeball" ${f.isOver || !g.started || f.phase.type === 'respot' ? 'disabled' : ''}>${f.freeBall ? 'Free ball ✓' : 'Free ball'}</button>
+          </div>
+        </div>
       </div>
       <div class="links">
         <button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>
@@ -994,15 +1000,21 @@ function renderBilliards() {
     </header>
     <div class="screen__body">
       <div class="tally"><span>${g.target ? `Target <b>${g.target}</b>` : 'No target'}</span><span class="tally__sep">${name(0)} v ${name(1)}${timerChip(g.startTime, g.endTime)}</span></div>
-      <div class="panels">${panels}</div>
-      ${g.frameFresh ? breakoffChooser(g, name) + cueChooser(g) : ''}
-      <div class="actions">
-        <button class="act act--warn" data-action="foul" ${lock ? 'disabled' : ''}>Foul +2</button>
-        <button class="act act--primary" data-action="miss" ${lock ? 'disabled' : ''}>Miss</button>
-        ${g.target ? '' : `<button class="act" data-action="finish" ${lock ? 'disabled' : ''}>Finish</button>`}
-        <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+      <div class="playfield">
+        <div class="playfield__score">
+          <div class="panels">${panels}</div>
+        </div>
+        <div class="playfield__controls">
+          ${g.frameFresh ? breakoffChooser(g, name) + cueChooser(g) : ''}
+          <div class="actions">
+            <button class="act act--warn" data-action="foul" ${lock ? 'disabled' : ''}>Foul +2</button>
+            <button class="act act--primary" data-action="miss" ${lock ? 'disabled' : ''}>Miss</button>
+            ${g.target ? '' : `<button class="act" data-action="finish" ${lock ? 'disabled' : ''}>Finish</button>`}
+            <button class="act" data-action="undo" ${g.undoStack.length ? '' : 'disabled'}>Undo</button>
+          </div>
+          <div class="strokelist">${strokes}</div>
+        </div>
       </div>
-      <div class="strokelist">${strokes}</div>
       <div class="links">
         <button data-action="concede" ${lock ? 'disabled' : ''}>Concede</button>
         <button data-action="leave">Leave (don’t count)</button>
