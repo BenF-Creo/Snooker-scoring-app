@@ -210,8 +210,12 @@ class SnookerGame {
     const f = this.frame;
     f.currentBreak = 0;
     f.currentPlayer = 1 - f.currentPlayer;
-    // A half-finished red→colour reverts: the incoming player starts on a red.
-    if (f.phase.type === 'colour' && f.redsRemaining > 0) f.phase = { type: 'red' };
+    // A half-finished red→colour reverts on a change of turn: the incoming
+    // player starts on a red while reds remain, or on the colours in order
+    // (yellow) once the last red has gone.
+    if (f.phase.type === 'colour') {
+      f.phase = f.redsRemaining > 0 ? { type: 'red' } : { type: 'sequence', value: 2 };
+    }
   }
 
   _finishFrame(winner) {
