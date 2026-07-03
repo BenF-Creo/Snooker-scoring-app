@@ -57,6 +57,10 @@ body {
 .screen__body {
   flex: 1;
   padding: 18px 16px;
+  /* Keep clear of the notch / Dynamic Island, which sits on a side edge in
+     landscape and the top in portrait. */
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -70,6 +74,8 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: calc(10px + env(safe-area-inset-top)) 10px 12px;
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
   border-bottom: 1px solid var(--line);
   background: rgba(6, 13, 10, 0.55);
   backdrop-filter: blur(12px);
@@ -622,9 +628,15 @@ select.field__input {
 
   .screen__body {
     padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
     gap: 10px;
   }
-  .appbar { padding: calc(6px + env(safe-area-inset-top)) 10px 8px; }
+  .appbar {
+    padding: calc(6px + env(safe-area-inset-top)) 10px 8px;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
 
   /* Two columns. The wrappers stop being transparent and lay out as flex. */
   .playfield { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; }
@@ -638,9 +650,13 @@ select.field__input {
   .playfield__score .panel__turn { min-height: 16px; }
   .playfield__score .panel__stats { margin-top: 6px; padding-top: 6px; gap: 14px; }
 
-  /* All seven balls on one row keeps the control column short. */
-  .playfield__controls .balls { grid-template-columns: repeat(7, 1fr); gap: 7px; }
-  .playfield__controls .ball { font-size: 15px; }
+  /* Balls in two compact rows (4 + 3), centred and size-capped so they stay
+     clear of the notch and don't dominate the control column. */
+  .playfield__controls .balls {
+    grid-template-columns: repeat(4, 1fr); gap: 8px;
+    max-width: 300px; align-self: center; width: 100%;
+  }
+  .playfield__controls .ball { font-size: 16px; }
   .playfield__controls .ball__badge { font-size: 9px; padding: 1px 5px; }
 
   /* Stroke list scrolls inside its own column instead of pushing the page. */

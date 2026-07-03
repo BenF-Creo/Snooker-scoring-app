@@ -554,6 +554,7 @@ const App = {
         case 'concede': openConcedeModal(); break;
         case 'restart': g.restartFrame(); afterSnooker(); break;
         case 'newmatch': App.newSnooker(); afterSnooker(); break;
+        case 'cancel': confirmCancelSnooker(); break;
       }
     });
 
@@ -868,6 +869,7 @@ function renderSnooker() {
         <button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>
         <button data-action="restart">Restart frame</button>
         <button data-action="newmatch">New match</button>
+        <button data-action="cancel">Cancel match</button>
       </div>
     </div>`;
 
@@ -1017,7 +1019,7 @@ function renderBilliards() {
       </div>
       <div class="links">
         <button data-action="concede" ${lock ? 'disabled' : ''}>Concede</button>
-        <button data-action="leave">Leave (don’t count)</button>
+        <button data-action="leave">Cancel game</button>
         <button data-action="newgame">New game</button>
       </div>
     </div>`;
@@ -1047,14 +1049,36 @@ function openBilliardsConcede() {
 
 function confirmLeaveBilliards() {
   openOverlay(`
-    <h3>Leave game</h3>
+    <h3>Cancel game</h3>
     <p class="muted">End this game without counting it? Nothing from this game will be saved.</p>
-    <button class="primary primary--danger" data-leave>Leave, don’t count</button>
-    <button class="modal__cancel" data-cancel style="margin-top:10px">Cancel</button>`);
+    <button class="primary primary--danger" data-leave>Cancel game</button>
+    <button class="modal__cancel" data-cancel style="margin-top:10px">Keep playing</button>`);
   const o = document.getElementById('overlay');
   o.querySelector('[data-leave]').onclick = () => {
     App.billiards = null;
     try { localStorage.removeItem(KEYS.billiards); } catch (e) { /* ignore */ }
+    closeOverlay();
+    showScreen('home');
+  };
+  o.querySelector('[data-cancel]').onclick = closeOverlay;
+}
+
+// Cancel the whole snooker match without recording it, and return to the menu.
+function confirmCancelSnooker() {
+  const g = App.snooker;
+  const played = g && (g.framesWon[0] > 0 || g.framesWon[1] > 0);
+  const note = played
+    ? 'End this match now? Frames already won won’t count and nothing from it will be saved.'
+    : 'End this match without counting it? Nothing from it will be saved.';
+  openOverlay(`
+    <h3>Cancel match</h3>
+    <p class="muted">${note}</p>
+    <button class="primary primary--danger" data-leave>Cancel match</button>
+    <button class="modal__cancel" data-cancel style="margin-top:10px">Keep playing</button>`);
+  const o = document.getElementById('overlay');
+  o.querySelector('[data-leave]').onclick = () => {
+    App.snooker = null;
+    try { localStorage.removeItem(KEYS.snooker); } catch (e) { /* ignore */ }
     closeOverlay();
     showScreen('home');
   };
