@@ -988,10 +988,7 @@ function renderBilliards() {
         <span class="strokerow__val">+${s.value}</span>
       </button>`;
   };
-  const strokes =
-    BILLIARDS_STROKES.filter(s => s.group !== 'combo').map(renderStroke).join('') +
-    '<div class="strokelist__sep">Combinations · one stroke, one tap</div>' +
-    BILLIARDS_STROKES.filter(s => s.group === 'combo').map(renderStroke).join('');
+  const strokes = BILLIARDS_STROKES.map(renderStroke).join('');
 
   const lock = g.isOver || !g.started;
   document.getElementById('screen-billiards').innerHTML = `

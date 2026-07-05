@@ -1,6 +1,6 @@
 /* App-shell cache with a network-first strategy so updates always come through
    when online, while still working offline from cache. */
-const CACHE = "cue-scorer-v30";
+const CACHE = "cue-scorer-v31";
 const ASSETS = [
   './',
   'index.html',
