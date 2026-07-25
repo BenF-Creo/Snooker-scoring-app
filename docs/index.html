@@ -161,13 +161,23 @@
           <h3 class="form__heading">Handicaps</h3>
           <p class="form__note">Give a player a head start — they begin each frame/game on these points. Leave at 0 for none. Handicaps don’t apply to solo practice.</p>
           <div class="field-row">
-            <label class="field field--half">
+            <label class="field field--half" id="set-hcap-s0-field">
               <span class="field__label" id="set-hcap-s0-label">Snooker — Player 1</span>
               <input id="set-hcap-s0" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
             </label>
-            <label class="field field--half">
+            <label class="field field--half" id="set-hcap-s1-field">
               <span class="field__label" id="set-hcap-s1-label">Snooker — Player 2</span>
               <input id="set-hcap-s1" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field field--half" id="set-hcap-s2-field">
+              <span class="field__label" id="set-hcap-s2-label">Snooker — Player 3</span>
+              <input id="set-hcap-s2" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
+            </label>
+            <label class="field field--half" id="set-hcap-s3-field">
+              <span class="field__label" id="set-hcap-s3-label">Snooker — Player 4</span>
+              <input id="set-hcap-s3" class="field__input" type="number" inputmode="numeric" min="0" step="1" value="0" />
             </label>
           </div>
           <div class="field-row">
@@ -253,6 +263,9 @@
 
         <h3>Winning</h3>
         <p>The player with more points once the black is potted wins the frame (a player who is well behind may concede). The match is won by the first player to reach a majority of the frames. If scores are level after the black, it is re-spotted for a deciding shot.</p>
+
+        <h3>Three or four players</h3>
+        <p>Snooker can also be scored for 3 or 4 players (set the number on the Players screen). Everyone takes turns in rotation and the highest score when the balls run out wins that frame. There’s no best-of match tally — each frame stands on its own — and a foul pays its penalty to <em>every</em> other player. Level top scores are a draw.</p>
 
         <button class="btn btn--primary btn--block" data-nav="snooker">Start Snooker</button>
       </div>

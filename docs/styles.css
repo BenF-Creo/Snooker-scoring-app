@@ -179,6 +179,11 @@ body {
 
 /* ---------- Scoreboard panels ---------- */
 .panels { display: flex; gap: 12px; }
+/* Three or four players: a compact grid instead of a single narrow row. */
+.panels--multi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.panels--multi .panel__score { font-size: 40px; }
+.panels--multi .panel { padding: 11px 8px 10px; }
+.panels--n3 .panel:nth-child(3) { grid-column: 1 / -1; }   /* 2 on top, 1 wide below */
 .panel {
   flex: 1; position: relative;
   background: var(--surface); border: 1px solid var(--line);
@@ -463,6 +468,13 @@ select.field__input {
 .seg--mini { flex: 1; max-width: 280px; padding: 3px; }
 .seg--mini .seg__btn { padding: 9px 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Snooker player-count picker on the Players screen */
+.seg--players { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.seg--players .seg__label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); flex: none; }
+.seg--players .seg__opts { display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; flex: 1; max-width: 200px; }
+.seg--players .seg__btn { flex: 1; appearance: none; border: none; background: transparent; color: var(--muted); font-size: 15px; font-weight: 700; padding: 9px 0; border-radius: 9px; cursor: pointer; }
+.seg--players .seg__btn--active { background: var(--accent-soft); color: var(--accent-2); box-shadow: inset 0 0 0 1px rgba(200,169,106,0.35); }
+
 .stats-empty {
   text-align: center; color: var(--muted); font-size: 14px; line-height: 1.6;
   padding: 40px 16px; border: 1px dashed var(--line); border-radius: var(--radius); margin-top: 4px;
@@ -639,10 +651,14 @@ select.field__input {
   .playfield__score { display: flex; flex-direction: column; gap: 10px; flex: 4 1 0; min-width: 0; }
   .playfield__controls { display: flex; flex-direction: column; gap: 10px; flex: 6 1 0; min-width: 0; }
 
-  /* Scoreboard: stack the two players vertically and shrink the big number. */
+  /* Scoreboard: stack the players vertically and shrink the big number. */
   .playfield__score .panels { flex-direction: column; gap: 10px; }
+  /* Multiplayer scoreboards also stack (single column) in the narrow column. */
+  .playfield__score .panels--multi { display: flex; }
+  .playfield__score .panels--n3 .panel:nth-child(3) { grid-column: auto; }
   .playfield__score .panel { padding: 9px 12px; }
   .playfield__score .panel__score { font-size: 34px; margin: 1px 0; }
+  .playfield__score .panels--multi .panel__score { font-size: 28px; }
   .playfield__score .panel__turn { min-height: 16px; }
   .playfield__score .panel__stats { margin-top: 6px; padding-top: 6px; gap: 14px; }
 

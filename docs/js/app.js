@@ -24,7 +24,7 @@ const ICONS = {
 };
 
 const App = {
-  settings: { playerNames: ['Player 1', 'Player 2'], players: null, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100, snookerHandicaps: [0, 0], billiardsHandicaps: [0, 0] },
+  settings: { playerNames: ['Player 1', 'Player 2'], players: null, snookerPlayers: 2, snookerBestOf: 5, snookerReds: 15, billiardsTarget: 100, snookerHandicaps: [0, 0, 0, 0], billiardsHandicaps: [0, 0] },
   profiles: [],
   snooker: null,
   billiards: null,
@@ -102,12 +102,20 @@ const App = {
   newSnooker(soloPid) {
     if (soloPid === undefined) soloPid = (this.snooker && this.snooker.solo) ? this.snooker.soloPid : null;
     this._flushBreaks(this.snooker, 'snooker');
-    // Handicaps only apply to a normal two-player game, not solo practice.
-    const shcp = soloPid ? [0, 0] : (this.settings.snookerHandicaps || [0, 0]);
-    this.snooker = new SnookerGame(this.settings.snookerBestOf, this.settings.snookerReds, shcp);
+    // Solo practice is always two-handed; otherwise use the chosen roster size.
+    const np = soloPid ? 2 : Math.max(2, Math.min(4, this.settings.snookerPlayers || 2));
+    // Three or four players is a single self-contained frame, highest score wins.
+    const bestOf = np > 2 ? 1 : this.settings.snookerBestOf;
+    // Handicaps only apply to a normal game, not solo practice.
+    const shcp = _zeros(np);
+    if (!soloPid) {
+      const src = this.settings.snookerHandicaps || [];
+      for (let i = 0; i < np; i++) shcp[i] = src[i] || 0;
+    }
+    this.snooker = new SnookerGame(bestOf, this.settings.snookerReds, shcp, np);
     this.snooker.solo = !!soloPid;
     this.snooker.soloPid = soloPid || null;
-    this.snooker.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice();
+    this.snooker.players = soloPid ? [soloPid, soloSideId(soloPid)] : this.settings.players.slice(0, np);
     this.saveGames();
   },
 
@@ -370,11 +378,16 @@ const App = {
       this._saveProfiles();
     }
 
-    // Ensure a valid current selection of two existing profiles.
-    const ok = this.settings.players && this.settings.players.length === 2 &&
-      this.profileById(this.settings.players[0]) && this.profileById(this.settings.players[1]);
-    if (!ok) {
-      this.settings.players = [this.profiles[0].id, this.profiles[Math.min(1, this.profiles.length - 1)].id];
+    // Keep four seat selections on hand (seats 0–1 also used by billiards);
+    // snooker uses as many as the chosen roster size. Fill/repair any gaps.
+    const pick = i => this.profiles[Math.min(i, this.profiles.length - 1)].id;
+    let players = Array.isArray(this.settings.players) ? this.settings.players.slice(0, 4) : [];
+    let changed = players.length !== 4;
+    for (let i = 0; i < 4; i++) {
+      if (!this.profileById(players[i])) { players[i] = pick(i); changed = true; }
+    }
+    if (changed) {
+      this.settings.players = players;
       this._saveSettings();
     }
   },
@@ -386,7 +399,7 @@ const App = {
   _loadGames() {
     try {
       const a = JSON.parse(localStorage.getItem(KEYS.snooker));
-      if (a && a.frame) { const g = new SnookerGame(a.bestOf, a.reds); Object.assign(g, a); this._migrateSnooker(g); this.snooker = g; }
+      if (a && a.frame) { const g = new SnookerGame(a.bestOf, a.reds, a.handicaps, a.numPlayers); Object.assign(g, a); this._migrateSnooker(g); this.snooker = g; }
     } catch (e) { /* ignore */ }
     try {
       const b = JSON.parse(localStorage.getItem(KEYS.billiards));
@@ -399,6 +412,7 @@ const App = {
   _migrateSnooker(g) {
     if (!Array.isArray(g.frameLog)) g.frameLog = [];
     if (!Array.isArray(g.breaks)) g.breaks = [];
+    if (!(g.numPlayers >= 2 && g.numPlayers <= 4)) g.numPlayers = 2;
     const f = g.frame;
     if (f.pots === undefined) f.pots = [0, 0];
     if (f.misses === undefined) f.misses = [0, 0];
@@ -444,14 +458,18 @@ const App = {
 
     document.getElementById('set-target').value = this.settings.billiardsTarget ? String(this.settings.billiardsTarget) : '';
 
-    const shcp = this.settings.snookerHandicaps || [0, 0];
+    const shcp = this.settings.snookerHandicaps || [0, 0, 0, 0];
     const bhcp = this.settings.billiardsHandicaps || [0, 0];
-    document.getElementById('set-hcap-s0').value = String(shcp[0] || 0);
-    document.getElementById('set-hcap-s1').value = String(shcp[1] || 0);
+    const np = Math.max(2, Math.min(4, this.settings.snookerPlayers || 2));
+    for (let i = 0; i < 4; i++) {
+      const inp = document.getElementById('set-hcap-s' + i);
+      const field = document.getElementById('set-hcap-s' + i + '-field');
+      inp.value = String(shcp[i] || 0);
+      document.getElementById('set-hcap-s' + i + '-label').textContent = 'Snooker — ' + this.playerName(i);
+      if (field) field.style.display = i < np ? '' : 'none';   // only show active seats
+    }
     document.getElementById('set-hcap-b0').value = String(bhcp[0] || 0);
     document.getElementById('set-hcap-b1').value = String(bhcp[1] || 0);
-    document.getElementById('set-hcap-s0-label').textContent = 'Snooker — ' + this.playerName(0);
-    document.getElementById('set-hcap-s1-label').textContent = 'Snooker — ' + this.playerName(1);
     document.getElementById('set-hcap-b0-label').textContent = 'Billiards — ' + this.playerName(0);
     document.getElementById('set-hcap-b1-label').textContent = 'Billiards — ' + this.playerName(1);
   },
@@ -478,7 +496,7 @@ const App = {
     const hcapInput = (id, arrKey, idx) => {
       document.getElementById(id).addEventListener('input', e => {
         const v = parseInt(e.target.value, 10);
-        if (!this.settings[arrKey]) this.settings[arrKey] = [0, 0];
+        if (!this.settings[arrKey]) this.settings[arrKey] = [0, 0, 0, 0];
         this.settings[arrKey][idx] = (isNaN(v) || v < 0) ? 0 : v;
         this._saveSettings();
         this._refreshPristineGames();
@@ -486,6 +504,8 @@ const App = {
     };
     hcapInput('set-hcap-s0', 'snookerHandicaps', 0);
     hcapInput('set-hcap-s1', 'snookerHandicaps', 1);
+    hcapInput('set-hcap-s2', 'snookerHandicaps', 2);
+    hcapInput('set-hcap-s3', 'snookerHandicaps', 3);
     hcapInput('set-hcap-b0', 'billiardsHandicaps', 0);
     hcapInput('set-hcap-b1', 'billiardsHandicaps', 1);
 
@@ -513,7 +533,11 @@ const App = {
   },
 
   _updateHomePlayers() {
-    document.getElementById('home-players').textContent = this.playerName(0) + ' & ' + this.playerName(1);
+    const np = Math.max(2, Math.min(4, this.settings.snookerPlayers || 2));
+    const names = [];
+    for (let i = 0; i < np; i++) names.push(this.playerName(i));
+    document.getElementById('home-players').textContent =
+      np === 2 ? names.join(' & ') : names.slice(0, -1).join(', ') + ' & ' + names[np - 1];
   },
 
   // --- navigation ---
@@ -583,6 +607,11 @@ const App = {
     players.addEventListener('click', e => {
       const t = e.target.closest('[data-action], [data-viewstats], [data-del]');
       if (!t) return;
+      if (t.dataset.nplayers) {
+        this.settings.snookerPlayers = Math.max(2, Math.min(4, parseInt(t.dataset.nplayers, 10)));
+        this._saveSettings(); renderPlayers(); this._refreshPristineGames(); this._updateHomePlayers();
+        return;
+      }
       if (t.dataset.action === 'add-profile') {
         const inp = document.getElementById('add-name');
         if (this.addProfile(inp.value)) { inp.value = ''; renderPlayers(); this._updateHomePlayers(); }
@@ -768,12 +797,12 @@ function cueChooser(g) {
 // Break-off chooser shown before a frame/game has started.
 function breakoffChooser(g, name) {
   const seat = g.frame ? g.frame.currentPlayer : g.currentPlayer;
+  const n = g.numPlayers || 2;
+  const btns = Array.from({ length: n }, (_, i) =>
+    `<button class="seg__btn ${seat === i ? 'seg__btn--active' : ''}" data-action="breaker" data-seat="${i}">${name(i)}</button>`).join('');
   return `<div class="breakoff">
       <span class="breakoff__label">Who breaks off?</span>
-      <div class="seg seg--mini">
-        <button class="seg__btn ${seat === 0 ? 'seg__btn--active' : ''}" data-action="breaker" data-seat="0">${name(0)}</button>
-        <button class="seg__btn ${seat === 1 ? 'seg__btn--active' : ''}" data-action="breaker" data-seat="1">${name(1)}</button>
-      </div>
+      <div class="seg seg--mini ${n > 2 ? 'seg--wrap' : ''}">${btns}</div>
     </div>`;
 }
 
@@ -792,19 +821,21 @@ function renderSnooker() {
   const legal = g.legalKeys();
   const name = i => escapeHtml(App.gamePlayerName(g, i));
 
-  const panels = [0, 1].map(i => {
+  const seatList = Array.from({ length: g.numPlayers }, (_, i) => i);
+  const panels = seatList.map(i => {
     const active = !f.isOver && f.currentPlayer === i;
-    const leading = g.leader() === i && f.scores[0] !== f.scores[1];
+    const leading = g.leader() === i;
     const turn = !active ? '&nbsp;'
       : (f.currentBreak > 0 ? `<span class="panel__turn--break">Break ${f.currentBreak}</span>` : 'At table');
+    const stats = g.casual
+      ? `<div class="stat"><span class="stat__value">${snookerMatchHigh(g, i)}</span><span class="stat__label">High break</span></div>`
+      : `<div class="stat"><span class="stat__value">${g.framesWon[i]}</span><span class="stat__label">Frames</span></div>
+         <div class="stat"><span class="stat__value">${snookerMatchHigh(g, i)}</span><span class="stat__label">Match high</span></div>`;
     return `<div class="panel ${active ? 'panel--active' : ''}">
         <div class="panel__name">${name(i)}</div>
         <div class="panel__score ${leading ? 'is-leading' : ''}">${f.scores[i]}</div>
         <div class="panel__turn">${turn}</div>
-        <div class="panel__stats">
-          <div class="stat"><span class="stat__value">${g.framesWon[i]}</span><span class="stat__label">Frames</span></div>
-          <div class="stat"><span class="stat__value">${snookerMatchHigh(g, i)}</span><span class="stat__label">Match high</span></div>
-        </div>
+        <div class="panel__stats">${stats}</div>
       </div>`;
   }).join('');
 
@@ -837,17 +868,19 @@ function renderSnooker() {
   document.getElementById('screen-snooker').innerHTML = `
     <header class="appbar">
       <button class="appbar__btn appbar__btn--icon" data-action="home">${ICONS.back}<span>Menu</span></button>
-      <div class="appbar__title">${g.solo ? 'Solo · ' : ''}Frame ${g.frameNumber} · Best of ${g.bestOf}</div>
+      <div class="appbar__title">${g.solo ? 'Solo · ' : ''}${g.multiplayer ? g.numPlayers + ' Players · Snooker' : 'Frame ' + g.frameNumber + ' · Best of ' + g.bestOf}</div>
       <button class="appbar__btn" data-action="rules">Rules</button>
     </header>
     <div class="screen__body">
       <div class="tally">
-        <span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> ${g.casual ? 'casual frame' : 'frames'}</span>
-        <span class="tally__sep">${g.casual ? 'Single frame' : 'First to ' + g.framesToWin}${timerChip(g.frame.startTime, g.frame.endTime)}</span>
+        ${g.multiplayer
+          ? `<span><b>${g.numPlayers}</b>-player frame</span><span class="tally__sep">Highest score wins${timerChip(g.frame.startTime, g.frame.endTime)}</span>`
+          : `<span><b>${g.framesWon[0]}</b> &ndash; <b>${g.framesWon[1]}</b> ${g.casual ? 'casual frame' : 'frames'}</span>
+             <span class="tally__sep">${g.casual ? 'Single frame' : 'First to ' + g.framesToWin}${timerChip(g.frame.startTime, g.frame.endTime)}</span>`}
       </div>
       <div class="playfield">
         <div class="playfield__score">
-          <div class="panels">${panels}</div>
+          <div class="panels ${g.multiplayer ? 'panels--multi panels--n' + g.numPlayers : ''}">${panels}</div>
         </div>
         <div class="playfield__controls">
           ${g.frameFresh ? breakoffChooser(g, name) : `
@@ -866,10 +899,10 @@ function renderSnooker() {
         </div>
       </div>
       <div class="links">
-        <button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>
+        ${g.multiplayer ? '' : `<button data-action="concede" ${f.isOver ? 'disabled' : ''}>Concede frame</button>`}
         <button data-action="restart">Restart frame</button>
-        <button data-action="newmatch">New match</button>
-        <button data-action="cancel">Cancel match</button>
+        <button data-action="newmatch">${g.multiplayer ? 'New frame' : 'New match'}</button>
+        <button data-action="cancel">${g.multiplayer ? 'Cancel game' : 'Cancel match'}</button>
       </div>
     </div>`;
 
@@ -877,10 +910,13 @@ function renderSnooker() {
 }
 
 function openFoulModal() {
-  const opp = escapeHtml(App.gamePlayerName(App.snooker, 1 - App.snooker.frame.currentPlayer));
+  const g = App.snooker;
+  const to = g.multiplayer
+    ? 'each other player'
+    : escapeHtml(App.gamePlayerName(g, 1 - g.frame.currentPlayer));
   openOverlay(`
     <h3>Foul</h3>
-    <p class="muted">Penalty points to ${opp}</p>
+    <p class="muted">Penalty points to ${to}</p>
     <div class="foul-grid">${[4, 5, 6, 7].map(p => `<button class="foul-btn" data-foul="${p}">${p}</button>`).join('')}</div>
     <button class="modal__cancel" data-cancel>Cancel</button>`);
   const o = document.getElementById('overlay');
@@ -915,17 +951,35 @@ function openConcedeModal() {
 function showSnookerResult() {
   const g = App.snooker;
   const f = g.frame;
+  const scoreLine = f.scores.join(' – ');
+
+  if (g.casual) {
+    // A single self-contained frame (3–4 players, or a best-of-1): the highest
+    // score wins, and a tie for the lead is a draw.
+    const draw = f.winner === null;
+    openOverlay(`
+      <div class="result__badge">${draw ? ICONS.draw : ICONS.check}</div>
+      <h3>${draw ? 'Frame Drawn' : 'Frame Won'}</h3>
+      ${draw ? '' : `<div class="result__name">${escapeHtml(App.gamePlayerName(g, f.winner))}</div>`}
+      <div class="result__score">${scoreLine}</div>
+      <button class="primary" data-newmatch>Play Again</button>
+      <button class="modal__cancel" data-menu style="margin-top:10px">Main menu</button>`);
+    const o = document.getElementById('overlay');
+    o.querySelector('[data-newmatch]').onclick = () => { App.newSnooker(); closeOverlay(); afterSnooker(); };
+    o.querySelector('[data-menu]').onclick = () => { closeOverlay(); showScreen('home'); };
+    return;
+  }
+
   const w = f.winner === null ? f.currentPlayer : f.winner;
   const matchOver = g.matchWinner !== null;
-  const isMatch = matchOver && !g.casual;     // best-of-1 is a casual frame, not a match
   openOverlay(`
-    <div class="result__badge">${isMatch ? ICONS.trophy : ICONS.check}</div>
-    <h3>${isMatch ? 'Match Won' : 'Frame Won'}</h3>
+    <div class="result__badge">${matchOver ? ICONS.trophy : ICONS.check}</div>
+    <h3>${matchOver ? 'Match Won' : 'Frame Won'}</h3>
     <div class="result__name">${escapeHtml(App.gamePlayerName(g, w))}</div>
-    <div class="result__score">${f.scores[0]} – ${f.scores[1]}</div>
-    ${g.casual ? '' : `<p class="muted">Frames ${g.framesWon[0]} – ${g.framesWon[1]}</p>`}
+    <div class="result__score">${scoreLine}</div>
+    <p class="muted">Frames ${g.framesWon[0]} – ${g.framesWon[1]}</p>
     ${matchOver
-      ? `<button class="primary" data-newmatch>${g.casual ? 'Play Again' : 'New Match'}</button>`
+      ? `<button class="primary" data-newmatch>New Match</button>`
       : `<button class="primary" data-next>Next Frame</button>`}
     <button class="modal__cancel" data-menu style="margin-top:10px">Main menu</button>`);
   const o = document.getElementById('overlay');
@@ -1063,7 +1117,7 @@ function confirmLeaveBilliards() {
 // Cancel the whole snooker match without recording it, and return to the menu.
 function confirmCancelSnooker() {
   const g = App.snooker;
-  const played = g && (g.framesWon[0] > 0 || g.framesWon[1] > 0);
+  const played = g && g.framesWon.some(w => w > 0);
   const note = played
     ? 'End this match now? Frames already won won’t count and nothing from it will be saved.'
     : 'End this match without counting it? Nothing from it will be saved.';
@@ -1300,13 +1354,23 @@ function renderPlayers() {
         <button class="prow__del" data-del="${p.id}" aria-label="Delete player">✕</button>
       </div>`).join('');
 
+  const np = Math.max(2, Math.min(4, App.settings.snookerPlayers || 2));
+  const countSeg = [2, 3, 4].map(n =>
+    `<button class="seg__btn ${n === np ? 'seg__btn--active' : ''}" data-nplayers="${n}">${n}</button>`).join('');
+  const seats = [];
+  for (let i = 0; i < np; i++) {
+    const label = i < 2 ? 'Player ' + (i + 1) : 'Player ' + (i + 1) + ' (snooker)';
+    seats.push(`<label class="field"><span class="field__label">${label}</span><select class="field__input" data-sel="${i}">${opts(App.settings.players[i])}</select></label>`);
+  }
+
   document.getElementById('players-body').innerHTML = `
     <h3 class="stats-h">Now playing</h3>
-    <div class="nowplaying">
-      <label class="field"><span class="field__label">Player 1</span><select class="field__input" data-sel="0">${opts(App.settings.players[0])}</select></label>
-      <label class="field"><span class="field__label">Player 2</span><select class="field__input" data-sel="1">${opts(App.settings.players[1])}</select></label>
+    <div class="seg seg--players">
+      <span class="seg__label">Snooker players</span>
+      <div class="seg__opts">${countSeg}</div>
     </div>
-    <p class="form__note">Whoever is selected here is tracked when you start a new game. Changing it updates a game that hasn’t been scored yet.</p>
+    <div class="nowplaying">${seats.join('')}</div>
+    <p class="form__note">Whoever is selected here is tracked when you start a new game. Snooker can be played by 2–4 people (3 or 4 is a single frame, highest score wins); billiards uses the first two. Changing this updates a game that hasn’t been scored yet.</p>
     <h3 class="stats-h">Profiles</h3>
     <div class="plist">${list}</div>
     <div class="addrow">

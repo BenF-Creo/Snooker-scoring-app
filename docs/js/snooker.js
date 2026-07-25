@@ -1,4 +1,7 @@
-/* Snooker rule engine — plain data + methods, no DOM. */
+/* Snooker rule engine — plain data + methods, no DOM. Supports 2–4 players.
+   With two players it behaves as a normal match (best-of frames, re-spotted
+   black on a tie). With three or four it is a single-frame game: highest
+   score when the balls run out wins, and a foul pays every other player. */
 
 const SNOOKER_BALLS = [
   { key: 'red',    name: 'Red',    value: 1 },
@@ -13,13 +16,16 @@ const SNOOKER_BALLS = [
 const BREAK_MILESTONES = [10, 20, 30, 50, 70, 90, 100, 120, 147];
 
 function ballByValue(v) { return SNOOKER_BALLS.find(b => b.value === v); }
+function _zeros(n) { return Array.from({ length: n }, () => 0); }
 
 class SnookerGame {
-  constructor(bestOf, reds, handicaps) {
+  constructor(bestOf, reds, handicaps, numPlayers) {
+    const n = parseInt(numPlayers, 10);
+    this.numPlayers = (n >= 2 && n <= 4) ? n : 2;
     this.bestOf = bestOf || 5;
     this.reds = (reds === 10) ? 10 : 15;   // standard 15, or the shorter 10-red game
-    this.handicaps = (handicaps && handicaps.length === 2) ? handicaps.slice() : [0, 0];
-    this.framesWon = [0, 0];
+    this.handicaps = (handicaps && handicaps.length === this.numPlayers) ? handicaps.slice() : _zeros(this.numPlayers);
+    this.framesWon = _zeros(this.numPlayers);
     this.frameNumber = 1;
     this.startingPlayer = 0;          // last player to break off (not pre-selected)
     this.breaks = [];                 // completed visits this match
@@ -28,33 +34,36 @@ class SnookerGame {
     this.resetFrame();
   }
 
+  get multiplayer() { return this.numPlayers > 2; }
   get framesToWin() { return Math.floor(this.bestOf / 2) + 1; }
   get casual() { return this.bestOf === 1; }   // single frame = casual, not a match
 
   get matchWinner() {
-    if (this.framesWon[0] >= this.framesToWin) return 0;
-    if (this.framesWon[1] >= this.framesToWin) return 1;
+    for (let i = 0; i < this.numPlayers; i++) {
+      if (this.framesWon[i] >= this.framesToWin) return i;
+    }
     return null;
   }
 
   resetFrame() {
+    const n = this.numPlayers;
     this.frame = {
-      scores: [this.handicaps[0] || 0, this.handicaps[1] || 0],   // start on handicap
+      scores: this.handicaps.map(h => h || 0),   // start on handicap
       redsRemaining: this.reds,
       phase: { type: 'red' },          // 'red' | 'colour' | 'sequence'(value) | 'respot'
       currentPlayer: null,             // chosen at break-off; null = not started
       currentBreak: 0,
-      highBreaks: [0, 0],
+      highBreaks: _zeros(n),
       breaker: null,
       scored: false,
       visits: 0,
       freeBall: false,
       startTime: null,                 // set when the break-off player is chosen
       endTime: null,
-      pots: [0, 0],
-      misses: [0, 0],
-      safeties: [0, 0],
-      fouls: [0, 0],
+      pots: _zeros(n),
+      misses: _zeros(n),
+      safeties: _zeros(n),
+      fouls: _zeros(n),
       isOver: false,
       winner: null,
     };
@@ -72,7 +81,7 @@ class SnookerGame {
   // Choose who breaks off; starts the frame timer. Re-pickable until play begins.
   setBreaker(seat) {
     if (!this.frameFresh) return;
-    seat = seat ? 1 : 0;
+    seat = Math.max(0, Math.min(this.numPlayers - 1, seat | 0));
     this.startingPlayer = seat;
     this.frame.breaker = seat;
     this.frame.currentPlayer = seat;
@@ -98,10 +107,16 @@ class SnookerGame {
     return [];
   }
 
+  // The seat in front (unique highest score), or null if two or more are tied
+  // for the lead.
   leader() {
     const s = this.frame.scores;
-    if (s[0] === s[1]) return null;
-    return s[0] > s[1] ? 0 : 1;
+    const best = Math.max.apply(null, s);
+    let who = -1;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === best) { if (who !== -1) return null; who = i; }
+    }
+    return who;
   }
 
   pointsRemaining() {
@@ -147,8 +162,9 @@ class SnookerGame {
       f.phase = f.redsRemaining > 0 ? { type: 'red' } : { type: 'sequence', value: 2 };
     } else if (f.phase.type === 'sequence') {
       if (f.phase.value >= 7) {
-        // Black potted. If the scores are level it goes to a re-spotted black.
-        if (f.scores[0] === f.scores[1]) f.phase = { type: 'respot' };
+        // Black potted. Two-player level scores go to a re-spotted black;
+        // otherwise (or with 3–4 players) the highest score wins.
+        if (this.numPlayers === 2 && f.scores[0] === f.scores[1]) f.phase = { type: 'respot' };
         else this._finishFrame(this.leader());
       } else {
         f.phase = { type: 'sequence', value: f.phase.value + 1 };
@@ -197,19 +213,27 @@ class SnookerGame {
     f.fouls[f.currentPlayer] += 1;
     f.scored = true;                 // a foul puts points on the board: opening phase ends
     f.freeBall = false;
-    f.scores[1 - f.currentPlayer] += Math.max(4, points);
-    // A foul on the re-spotted black loses the frame.
+    const pen = Math.max(4, points);
+    if (this.numPlayers === 2) {
+      f.scores[1 - f.currentPlayer] += pen;
+    } else {
+      // With 3–4 players there is no single opponent: every other player is paid.
+      for (let i = 0; i < this.numPlayers; i++) if (i !== f.currentPlayer) f.scores[i] += pen;
+    }
+    // A foul on the re-spotted black (two-player only) loses the frame.
     if (f.phase.type === 'respot') { this._finishFrame(1 - f.currentPlayer); return; }
     this._recordVisit('foul');
     this._switchPlayer();
   }
 
-  // Concede the frame: `loser` is the seat giving it up.
+  // Concede the frame: `loser` is the seat giving it up. Two-player only in the
+  // UI; with more players the highest score simply takes it.
   concede(loser) {
     const f = this.frame;
     if (f.isOver) return;
-    if (loser !== 0 && loser !== 1) loser = f.currentPlayer === 0 ? 0 : 1;
     this._pushUndo();
+    if (this.numPlayers > 2) { this._finishFrame(this.leader()); return; }
+    if (loser !== 0 && loser !== 1) loser = f.currentPlayer === 0 ? 0 : 1;
     if (f.currentPlayer === null) f.currentPlayer = loser;   // allow conceding before break-off
     this._finishFrame(1 - loser);
   }
@@ -253,7 +277,7 @@ class SnookerGame {
   _switchPlayer() {
     const f = this.frame;
     f.currentBreak = 0;
-    f.currentPlayer = 1 - f.currentPlayer;
+    f.currentPlayer = (f.currentPlayer + 1) % this.numPlayers;
     // A half-finished red→colour reverts on a change of turn: the incoming
     // player starts on a red while reds remain, or on the colours in order
     // (yellow) once the last red has gone.
@@ -265,20 +289,21 @@ class SnookerGame {
   _finishFrame(winner) {
     const f = this.frame;
     this._recordVisit('frame');       // the player at the table ends their final visit
-    f.winner = winner;
+    if (winner === undefined) winner = null;
+    f.winner = winner;                // null = drawn (a tie for the lead)
     f.isOver = true;
     f.endTime = Date.now();
-    this.framesWon[winner] += 1;
+    if (winner !== null) this.framesWon[winner] += 1;
     this.frameLog.push({
       frame: this.frameNumber,
       winner: winner,
-      scores: [f.scores[0], f.scores[1]],
+      scores: f.scores.slice(),
       durationMs: f.startTime ? (f.endTime - f.startTime) : 0,
       breaker: f.breaker,
-      pots: [f.pots[0], f.pots[1]],
-      misses: [f.misses[0], f.misses[1]],
-      safeties: [f.safeties[0], f.safeties[1]],
-      fouls: [f.fouls[0], f.fouls[1]],
+      pots: f.pots.slice(),
+      misses: f.misses.slice(),
+      safeties: f.safeties.slice(),
+      fouls: f.fouls.slice(),
     });
   }
 
